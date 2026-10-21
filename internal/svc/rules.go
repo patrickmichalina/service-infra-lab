@@ -124,7 +124,7 @@ func checkR1(s *Spec, p *Platform) []Finding {
 	}
 	if s.Team != reg.Team {
 		fs = append(fs, errorf("R1", "team", fmt.Sprintf("set team: %s. To move the service to another team, change the registry entry (both teams' leads approve)", reg.Team),
-			"the registry assigns %s to team %s, not %s", s.Service, reg.Team, s.Team))
+			"the registry assigns %s to team %s, not %s", name, reg.Team, s.Team))
 	}
 	for _, env := range p.EnvOrder {
 		cfg := p.Envs[env].Config
