@@ -61,7 +61,7 @@ They never write accounts, ARNs, CIDRs, the boundary, the trust policy, the name
 | R8 used permissions | grants vs **observed usage** | – | usage data source |
 
 Render can say *what to write instead*. Admission is held to be at least as strict, so it holds when render is wrong
-or bypassed. Proven on a real API server: every rendered object admitted, 47 hostile objects refused.
+or bypassed. Proven on a real API server: every rendered object admitted, 47 hostile objects refused (159 checks).
 
 ---
 
@@ -73,7 +73,7 @@ or bypassed. Proven on a real API server: every rendered object admitted, 47 hos
 - **03 REFUSE:** `default` project (and how to fix the ClusterRole), `s3:*`, `*`, `sts:AssumeRole`, another team's
   SSM, allow-all.
 - **04 REFUSE:** prd without stg, a literal CIDR, `kms:CreateGrant` (use `kms:Decrypt`). Also: `kube-system`
-  ingress won't admit an ALB.
+  ingress won't admit an ALB (use `{albSubnets}`).
 
 `specs/fixed/` follows each fix literally, and all eight come out clean ACCEPTs.
 
@@ -134,7 +134,7 @@ The tests caught seven deliberate naive mutations.
 - **Gate:** an `"STG"` event dropped silently, same-instant deploys resolved by id order. Now defects that fail
   closed.
 - **Real cluster:** a CEL policy that kyverno accepted was invalid on the API server (`namespace` is reserved),
-  and every prd Application had `syncPolicy: null`, which the Argo CD CRD refuses. Golden files had both.
+  and every prd Application had `syncPolicy: null`, which the Argo CD CRD refuses. Every offline check passed both.
 
 Every attack is now a test.
 
@@ -156,20 +156,20 @@ The cost is a CNI change and naming conventions. I'd propose it as an amendment 
 
 ---
 
-## What I cut, and what I don't know
+## Scope, and what I would confirm first
 
-**Cut:**
+**Next, after day one:**
 - chart introspection;
 - `svcrender import`;
 - the usage collector (R8 reads a file);
 - inventory checks (the registry refuses resources nobody owns);
 - the exceptions UI.
 
-**Would verify first (needs AWS):**
+**Confirm in a real account and with the team:**
 - S3 gateway vs interface endpoints;
 - MSK ACLs vs IAM auth;
 - the ALB target type and real subnets;
 - existing role names.
 
-**Invented inputs:** catalog ids, load-balancer subnets, resource owners, observed usage, topic names, pointers.
-All are listed in `docs/notes.md`.
+**Stand-ins for inputs the brief leaves open:** catalog ids, load-balancer subnets, resource owners, observed
+usage, topic names, pointers. All are labelled in `docs/notes.md`.

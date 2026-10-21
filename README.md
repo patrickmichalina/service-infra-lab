@@ -26,10 +26,11 @@ go run ./cmd/svcrender all -specs specs/fixed -out out/render-fixed  # ... after
 go run ./cmd/svcrender check -repo example-org/trader-ui -spec specs/trader-ui.yaml -env prd   # one spec, as CI would
 
 policies/admission/test.sh                        # optional, needs the kyverno CLI; still offline
-tests/cluster/run.sh                              # optional, needs Docker, kind and helm: real API server, ~10 min
+tests/cluster/run.sh                              # optional, needs Docker, kind, helm and the network: two real clusters, ~10 min
 ```
 
-The committed `out/` is exactly what the code produces. CI regenerates it and fails on any diff.
+The committed `out/` is exactly what the code produces. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
+regenerates it and fails on any diff, and also runs the admission tests and the cluster suite.
 
 ## Part B verdicts
 
@@ -41,8 +42,8 @@ names the rule, the place in the spec, and the exact text to write instead. Full
 |---|---|---|---|
 | 01 odds-ingest | ACCEPT | ACCEPT | Renders the role, network policy, secret and infra app. The chart Application follows Kargo's first promotion. Warning: its internet rule also carries S3 traffic, so name `aws:s3` in its hosts |
 | 02 settlement-writer | PARTIAL | PARTIAL | **R8:** leaving the shared role would drop `kafka-cluster:WriteData` (and `DescribeTopic`) on `pp-settlement-events`, which the pod uses. The role is held until the spec grants it or acknowledges the removal; network and secrets render. Warnings: S3 is unreachable without 443 egress; nothing in `distribution` declares egress to 9090 |
-| 03 rfq-router | REFUSE | REFUSE | **R1** `project: default`, plus how to fix the chart's ClusterRole. **R2** `s3:*`, `Resource: "*"` twice, `sts:AssumeRole`. **R3** reads a `state` parameter. **R4** allow-all ingress, allow-all egress that names no hosts |
-| 04 trader-ui | REFUSE | REFUSE | **R7** prd without stg. **R4/R5** literal `203.0.113.40/32` (use 443 internet egress naming the host). **R2** `kms:CreateGrant` is key management (use `kms:Decrypt`). Warning: `kube-system` ingress will not admit an ALB (use `{albSubnets}`) |
+| 03 rfq-router | REFUSE | REFUSE | **R1** `project: default`, plus how to fix the chart's ClusterRole. **R2** `s3:*`, `Resource: "*"` twice, `sts:AssumeRole`. **R3** reads a `state` parameter. **R4** allow-all ingress, allow-all egress that names no hosts. Warning: S3 is unreachable without 443 egress |
+| 04 trader-ui | REFUSE | REFUSE | **R7** prd without stg. **R4/R5** literal `203.0.113.40/32` (use 443 internet egress naming the host). **R2** `kms:CreateGrant` is key management (use `kms:Decrypt`). Warnings: dropping stg deletes what runs there today (R8); `kube-system` ingress will not admit an ALB (use `{albSubnets}`); S3 is unreachable in prd |
 
 [`specs/fixed/`](specs/fixed) applies those fixes literally. All four then come out ACCEPT in both envs with no
 warnings ([`out/render-fixed/verdicts.txt`](out/render-fixed/verdicts.txt)), and a test keeps it that way.
@@ -72,26 +73,43 @@ Every input defect is reported in the output, and none is dropped silently. The 
 ## Layout
 
 ```
+docs/                design.md (Part A), notes.md, slides.md;  docs/evidence/ the cluster-run transcripts
+cmd/                 the two CLIs: svcrender (Part B) and soakgate (Part C)
 specs/               engineer-written specs, as requested;  specs/fixed/ after following the verdicts
 platform/            platform-owned inputs: registry, catalog, observed usage (R8), Kargo pointers
 inputs/              the brief's inputs, unchanged
 internal/svc/        spec, rules (one function per rule), render, verdicts
 promotion/           the soak gate library;  cmd/soakgate is its CLI
 policies/            admission (VAP + offline tests), Argo CD projects, namespace default-deny, AWS boundary and controller policy
-tests/cluster/       the real-cluster suite (kind) and its test charts
+tests/cluster/       the real-cluster suite (kind, plus a Cilium cluster) and its test charts
 alternative/         the alternative design's admission, network and IAM pieces
 out/                 committed outputs
+.github/workflows/   CI: tests, output drift, admission tests, cluster suite
 ```
 
-## Honesty
+## How far each part is exercised
 
-- **Run against real Kubernetes, not against AWS.** `tests/cluster/run.sh` applies every rendered object to a real API
-  server with the real ACK, External Secrets and Argo CD CRDs (strict field validation), syncs the ExternalSecrets,
-  has Argo CD refuse the platform's kinds in team charts, and checks every network rule on a policy-enforcing CNI.
-  Nothing talks to AWS: IAM behaviour is cited from AWS documentation and the VPC CNI's source, not executed
-  ([notes](docs/notes.md#things-verified-by-documentation-not-by-running-them)).
-- **Some inputs are invented** (catalog ids, load-balancer subnets, resource owners, observed usage, topic names,
-  pointer versions). Each is listed in
-  [`docs/notes.md`](docs/notes.md#things-i-invented-the-brief-gives-none-of-them).
-- **Not built:** `svcrender import`, chart introspection, the usage collector, inventory existence checks
-  ([design §6](docs/design.md#6-what-i-cut-from-day-one-and-why)).
+A take-home has no AWS account and no production data, so each part is exercised as far as the exercise allows.
+The rest is stated plainly.
+
+- **Kubernetes: on real clusters.** `tests/cluster/run.sh` makes 159 checks on throwaway kind clusters, which it
+  deletes afterwards ([transcript](docs/evidence/cluster-run.txt)):
+  - every rendered object is applied to a real API server (Kubernetes 1.37), with the real ACK, External Secrets and
+    Argo CD CRDs and strict field validation;
+  - all 47 hostile objects are refused, each by the policy meant to refuse it;
+  - the ExternalSecrets sync;
+  - Argo CD refuses the platform's kinds in team charts;
+  - every network rule is checked on a policy-enforcing CNI;
+  - the alternative design's FQDN egress is checked on Cilium.
+
+  The run also caught two bugs that no offline check could see
+  ([notes](docs/notes.md#where-the-ai-assistant-was-wrong-and-what-caught-it)).
+- **AWS: from primary sources.** IAM, Pod Identity, S3 endpoint and MSK behaviour are taken from AWS documentation
+  and the VPC CNI's source, each cited
+  ([notes](docs/notes.md#things-verified-by-documentation-not-by-running-them)). They are the first things to
+  confirm in a real account ([design §7](docs/design.md#7-unknowns-i-would-verify-first)).
+- **Inputs the brief leaves open** are filled in with labelled stand-ins: catalog ids, load-balancer subnets,
+  resource owners, observed usage, topic names and pointer versions
+  ([notes](docs/notes.md#things-i-invented-the-brief-gives-none-of-them)).
+- **Scope for day one:** chart introspection, `svcrender import`, inventory checks and the usage collector come
+  next ([design §6](docs/design.md#6-what-i-cut-from-day-one-and-why)).

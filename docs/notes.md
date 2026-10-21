@@ -87,12 +87,13 @@ Rough, in the order things happened. The decisions I expect to be asked about ar
 - **Load-balancer subnets** (`albSubnets` in `platform/catalog/`) and the auth provider's host
   (`login.auth-provider.example` in the fixed trader-ui).
 - **Buckets and callers in the fixed rfq-router:** `rfq-audit`, and callers in its own namespace.
-- **Assumptions, unverified:**
+- **Assumptions, still unverified:**
   - S3 is reached through a **gateway** endpoint (drives the S3 warning).
-  - The Pod Identity agent's link-local address `169.254.170.23:80` needs an egress baseline.
-  - Trust-policy conditions on Pod Identity session tags (`aws:RequestTag/kubernetes-namespace`, …) work as rendered.
-  - ACK resource fields (`Role.spec.inlinePolicies`, `PodIdentityAssociation.spec.roleARN`).
   - The `ack-services` and `services-infra` names.
+- **Assumptions since settled:**
+  - The ACK resource fields (`Role.spec.inlinePolicies`, `PodIdentityAssociation.spec.roleARN`, …): every rendered
+    object passes strict field validation against the real ACK CRDs ([cluster run](evidence/cluster-run.txt)).
+  - The Pod Identity agent's address and the session-tag trust conditions, by AWS documentation (below).
 
 ## Where the AI assistant was wrong, and what caught it
 
@@ -199,8 +200,7 @@ server. A later run found that every prd Application was invalid (`syncPolicy: n
 transcript is kept in [`docs/evidence/cluster-run-before-syncpolicy-fix.txt`](evidence/cluster-run-before-syncpolicy-fix.txt).
 The transcript's `Warning: store ssm isn't currently maintained` is expected. `ssm` is the store's name, and the test
 stores use External Secrets' fake provider, which v2.13.0 marks as not maintained
-(`providers/v1/fake/fake.go`, `MaintenanceStatus`). The `cluster` and `admission`
-CI jobs replay the same runs on GitHub; they were added with this change and have not run there yet.
+(`providers/v1/fake/fake.go`, `MaintenanceStatus`).
 
 ## Things verified by documentation, not by running them
 
@@ -218,11 +218,13 @@ There is no AWS account here, so these are cited, not executed:
 - S3 has no `DeleteBucketPublicAccessBlock` or `DeleteBucketOwnershipControls` IAM action: the Put action authorises
   the delete ([S3 API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeletePublicAccessBlock.html)).
 - The 19 `kafka-cluster:` actions ([MSK](https://docs.aws.amazon.com/msk/latest/developerguide/kafka-actions.html)).
+- ValidatingAdmissionPolicy is GA since Kubernetes 1.30, so the admission policies need EKS 1.30 or later
+  ([kubernetes.io](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/)). They were run
+  on 1.37.
 
 ## Open questions I would ask the team
 
 - Do MSK clients use IAM auth only, or IAM plus ACLs? That decides whether R8 for Kafka needs MSK logs.
 - How are the existing role names formed? Migration needs them for adoption.
-- Is there an internal ALB subnet range? That would let the platform offer a `{albSubnets}` token instead of
-  `{vpcCidr}`.
+- What are the internal load balancers' subnets, and do they use IP targets? `{albSubnets}` uses invented ranges.
 - Who owns `/<env>/state/rfq-router/venue-credentials` today, and why is it under `state`?

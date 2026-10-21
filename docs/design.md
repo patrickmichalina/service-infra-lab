@@ -153,12 +153,13 @@ sequenceDiagram
 
 ## 4. Failure modes
 
-**A change passes every check and is rejected downstream.** Three cases:
+**A change passes every check and is rejected downstream.** Four cases:
 
 | Case | What happens downstream | Mitigation |
 |---|---|---|
 | rfq-router's chart contains a ClusterRole | The team AppProject refuses it at sync. Render never sees the chart | The Argo sync failure goes to the team's channel. Next: render the chart with `helm template` and check its kinds against the project before merge (cut from day one) |
 | An S3 caller with no internet egress | S3 sits behind a VPC gateway endpoint, whose addresses are outside `{vpcCidr}`, so the NetworkPolicy drops the traffic | svcrender already warns ([settlement-writer](../out/render/verdicts.txt)) |
+| The renderer emits an object the API server refuses. This happened: every prd Application had `syncPolicy: null` ([notes](notes.md#where-the-ai-assistant-was-wrong-and-what-caught-it)) | Argo CD cannot sync it | Here, [`tests/cluster/run.sh`](../tests/cluster/run.sh) applies every rendered object to a real API server with the real CRDs. In production, platform CI would server-side dry-run each MR against the target cluster, which also runs admission, before it merges |
 | A bucket, SSM parameter or catalog entry that does not exist | The ExternalSecret goes `SecretSyncedError`, or the role grants nothing useful | Pods go unhealthy, which emits `degraded`, which keeps that Freight out of prd. Promotion is the safety net, not review. Next: existence checks against an inventory snapshot |
 
 **A change removes a permission the running pod depends on (R8).** This is request 02. Leaving the shared
@@ -263,8 +264,9 @@ they hold best when the rule is stated **once, there**.
 | ECR | One rendered repository per service | Create-on-push from a repository template, and replication instead of a prd cache of stg |
 
 **What is proven here.**
-- On real clusters ([`tests/cluster/run.sh`](../tests/cluster/run.sh)):
-  - the R8 admission policy refuses an unacknowledged removal and admits the acknowledged one;
+- On real clusters ([`tests/cluster/run.sh`](../tests/cluster/run.sh), [evidence](evidence/cluster-run.txt)):
+  - the R8 admission policy refuses an unacknowledged removal and admits the acknowledged one, for a NetworkPolicy
+    and for an IAM role;
   - an FQDN policy on Cilium reaches the named host and nothing else on 443.
 - **Not executed:** the ABAC policy (no AWS account here). Each of its mechanisms is documented
   ([`alternative/README.md`](../alternative/README.md)).

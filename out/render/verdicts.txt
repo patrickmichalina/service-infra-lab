@@ -48,7 +48,7 @@
    - error R2 at permissions[1].actions[0]: kms:CreateGrant manages a KMS key or who may use it (key management), which is never grantable from a spec
         fix: to read data encrypted with a key, grant kms:Decrypt; to write it, kms:GenerateDataKey; e.g. actions: [kms:Decrypt], resources: [kms-key:<key>]. S3 objects encrypted with SSE-KMS need only kms:Decrypt to be read
    - error R4 at egress[0].cidr: "203.0.113.40/32" is a literal CIDR; network rules use the {vpcCidr} token or 0.0.0.0/0 on 443 (and CIDRs never appear in a service repository, R5)
-        fix: it is outside the VPC: write - cidr: 0.0.0.0/0, ports: [443], reason: <the endpoint, e.g. auth provider login.example.com>
+        fix: it is outside the VPC: write - cidr: 0.0.0.0/0, ports: [443], hosts: [<the endpoint, e.g. login.example.com>], reason: <why, e.g. auth provider>
    - error R7 at environments: prd is listed without stg
         fix: keep stg: environments: [stg, prd]. Every prd change soaks in stg first, so prd cannot exist without it. To cut stg cost, run fewer or smaller replicas there in your chart's stg values
    - warning R8 [stg] at environments: trader-ui runs in stg today; without stg in environments, its deployment, role, network policy and secret there are deleted

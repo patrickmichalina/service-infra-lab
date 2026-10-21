@@ -438,7 +438,7 @@ func checkPorts(path string, ports []int) []Finding {
 }
 
 // literalCIDR explains what to write instead of a literal CIDR. Inside the VPC
-// that is the token; outside it, an internet rule with a reason, because a
+// that is the token; outside it, an internet rule naming its hosts, because a
 // NetworkPolicy cannot follow a provider's address changes and the address
 // would also leak into the repository (R5).
 func literalCIDR(path, cidr string, p *Platform, egress bool) Finding {
@@ -452,7 +452,7 @@ func literalCIDR(path, cidr string, p *Platform, egress bool) Finding {
 	}
 	fix := `it is inside the VPC: write cidr: "{vpcCidr}" (the platform fills in each environment's range), or "{albSubnets}" for the internal load balancer`
 	if !inside && egress {
-		fix = "it is outside the VPC: write - cidr: 0.0.0.0/0, ports: [443], reason: <the endpoint, e.g. auth provider login.example.com>"
+		fix = "it is outside the VPC: write - cidr: 0.0.0.0/0, ports: [443], hosts: [<the endpoint, e.g. login.example.com>], reason: <why, e.g. auth provider>"
 	} else if !inside {
 		fix = "ingress from outside the VPC arrives through the internal load balancer: write cidr: \"{albSubnets}\" with a reason"
 	}
