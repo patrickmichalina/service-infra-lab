@@ -3,8 +3,6 @@
 service: settlement-writer
 team: state
 environments: [stg, prd]
-image: trading/settlement-writer
-chart: settlement-writer
 
 ingress:
   - namespace: monitoring

@@ -24,3 +24,19 @@ spec:
       message: "a team's Application must use the team's Argo CD project (R1)"
     - expression: "object.spec.destination.namespace == variables.team"
       message: "a team's Application deploys only into the team's namespace (R1)"
+---
+# Without a binding a ValidatingAdmissionPolicy is never evaluated. matchResources repeats
+# the policy's own constraints: redundant for the API server, needed by the offline kyverno CLI.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: service-application
+spec:
+  policyName: service-application
+  validationActions: [Deny]
+  matchResources:
+    resourceRules:
+      - apiGroups: ["argoproj.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["applications"]

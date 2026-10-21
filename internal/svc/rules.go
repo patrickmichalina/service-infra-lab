@@ -34,10 +34,10 @@ func CheckEnv(s *Spec, p *Platform, env string) []Finding {
 	return fs
 }
 
-// team is the service's team as the registry says; the spec's own claim is
-// used only when the service is not registered (and R1 refuses it anyway).
+// team is the team the registry gives the spec's repository; the spec's own
+// claim is used only when the repository is not registered (R1 refuses that).
 func team(s *Spec, p *Platform) string {
-	if r, ok := p.Registry[s.Service]; ok {
+	if _, r, ok := p.Lookup(s.Repo); ok {
 		return r.Team
 	}
 	return s.Team
@@ -52,6 +52,8 @@ var reserved = map[string]struct{ rule, why string }{
 	"project":             {"R1", "the platform deploys under your team's Argo CD project"},
 	"argocdProject":       {"R1", "the platform deploys under your team's Argo CD project"},
 	"destination":         {"R1", "the platform chooses the cluster and namespace"},
+	"chart":               {"R1", "the registry names the chart your repository ships"},
+	"image":               {"R1", "the registry names the image your repository ships"},
 	"podSelector":         {"R4", "the platform selects your pods by app.kubernetes.io/name"},
 	"accountId":           {"R5", "account ids live only in platform config"},
 	"roleArn":             {"R5", "the platform names and creates your role"},
@@ -67,9 +69,9 @@ func checkSchema(s *Spec, p *Platform) []Finding {
 			fs = append(fs, errorf(r.rule, k, reservedFix(k, s, p), "%q is set by the platform, not the spec: %s", k, r.why))
 			continue
 		}
-		fs = append(fs, errorf("SCHEMA", k, "remove it; allowed fields are service, team, environments, image, chart, ingress, egress, permissions, secrets, acknowledgeRemovals", "unknown field %q", k))
+		fs = append(fs, errorf("SCHEMA", k, "remove it; allowed fields are service, team, environments, ingress, egress, permissions, secrets, acknowledgeRemovals", "unknown field %q", k))
 	}
-	for name, v := range map[string]string{"service": s.Service, "team": s.Team, "image": s.Image, "chart": s.Chart} {
+	for name, v := range map[string]string{"service": s.Service, "team": s.Team} {
 		if v == "" {
 			fs = append(fs, errorf("SCHEMA", name, fmt.Sprintf("add %s: <value>", name), "%s is required", name))
 		}
@@ -95,8 +97,11 @@ func checkSchema(s *Spec, p *Platform) []Finding {
 }
 
 func reservedFix(field string, s *Spec, p *Platform) string {
-	if reserved[field].rule != "R1" {
+	switch {
+	case reserved[field].rule != "R1":
 		return "remove it"
+	case field == "chart" || field == "image":
+		return fmt.Sprintf("remove it; to change it, edit your service's entry in platform-gitops teams/%s/services.yaml", team(s, p))
 	}
 	t := team(s, p)
 	return fmt.Sprintf("remove it. %s deploys into namespace %s under Argo CD project %s, because the registry assigns it to team %s. "+
@@ -107,12 +112,16 @@ func reservedFix(field string, s *Spec, p *Platform) string {
 // ---- R1: own namespace, own project ----------------------------------------
 
 func checkR1(s *Spec, p *Platform) []Finding {
-	reg, ok := p.Registry[s.Service]
+	name, reg, ok := p.Lookup(s.Repo)
 	if !ok {
-		return []Finding{errorf("R1", "service", fmt.Sprintf("register it in platform-gitops teams/%s/services.yaml with this repository; your team leads approve that, not the platform team", s.Team),
-			"%q is not a registered service, so it has no team and no namespace", s.Service)}
+		return []Finding{errorf("R1", "service", fmt.Sprintf("register the service in platform-gitops teams/%s/services.yaml with repo: %s; your team leads approve that, not the platform team", s.Team, s.Repo),
+			"repository %q is not registered, so it has no service, team or namespace", s.Repo)}
 	}
 	var fs []Finding
+	if s.Service != name {
+		fs = append(fs, errorf("R1", "service", fmt.Sprintf("service: %s. A repository renders only the service registered to it", name),
+			"repository %s is registered as service %s, but this spec says %q", s.Repo, name, s.Service))
+	}
 	if s.Team != reg.Team {
 		fs = append(fs, errorf("R1", "team", fmt.Sprintf("set team: %s. To move the service to another team, change the registry entry (both teams' leads approve)", reg.Team),
 			"the registry assigns %s to team %s, not %s", s.Service, reg.Team, s.Team))
@@ -486,7 +495,11 @@ func checkRefs(s *Spec, e *Env) []Finding {
 func checkR8(s *Spec, p *Platform, env string) []Finding {
 	obs := p.Envs[env].Observed[s.Service]
 	if obs == nil {
-		return nil
+		if p.Envs[env].Pointers[s.Service] == nil {
+			return nil // not running here yet: nothing can be removed from it
+		}
+		return []Finding{warnf("R8", "permissions", "",
+			"%s runs here but there is no usage data for it, so a permission this spec removes cannot be detected; review the role diff by hand until the usage collector reports", s.Service)}
 	}
 	var fs []Finding
 	for _, u := range obs.Used {

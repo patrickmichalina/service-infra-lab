@@ -2,8 +2,6 @@
 service: odds-ingest
 team: ingestion
 environments: [stg, prd]
-image: trading/odds-ingest
-chart: odds-ingest
 
 ingress:
   - namespace: monitoring

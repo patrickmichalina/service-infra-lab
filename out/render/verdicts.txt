@@ -1,6 +1,8 @@
 == odds-ingest
-   stg  ACCEPT   0 error(s), 7 object(s) -> stg/odds-ingest/
-   prd  ACCEPT   0 error(s), 7 object(s) -> prd/odds-ingest/
+   stg  ACCEPT   0 error(s), 6 object(s) -> stg/odds-ingest/
+        note: no chart Application yet: Kargo has not promoted odds-ingest to stg
+   prd  ACCEPT   0 error(s), 6 object(s) -> prd/odds-ingest/
+        note: no chart Application yet: Kargo has not promoted odds-ingest to prd
 
 == rfq-router
    stg  REFUSE   8 error(s), 0 object(s)

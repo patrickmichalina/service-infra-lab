@@ -5,8 +5,6 @@
 service: rfq-router
 team: normalization
 environments: [stg, prd]
-image: trading/rfq-router
-chart: rfq-router
 
 ingress:
   - namespace: normalization

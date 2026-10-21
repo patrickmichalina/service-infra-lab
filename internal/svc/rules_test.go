@@ -20,8 +20,6 @@ const base = `
 service: odds-ingest
 team: ingestion
 environments: [stg, prd]
-image: trading/odds-ingest
-chart: odds-ingest
 ingress:
   - {namespace: monitoring, ports: [8080]}
 egress:
@@ -34,9 +32,18 @@ permissions:
     resources: ["s3-object:trading-platform-{env}-odds-snapshots/*"]
 `
 
+// spec parses yaml as if read from the repository registered for the service
+// it names; specFrom says which repository it came from.
 func spec(t *testing.T, yaml string) *Spec {
 	t.Helper()
-	s, err := ParseSpec("test.yaml", []byte(yaml))
+	s := specFrom(t, "", yaml)
+	s.Repo = "example-org/" + s.Service
+	return s
+}
+
+func specFrom(t *testing.T, repo, yaml string) *Spec {
+	t.Helper()
+	s, err := ParseSpec("test.yaml", repo, []byte(yaml))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,8 +107,24 @@ func TestR1(t *testing.T) {
 	t.Run("team comes from the registry, not the spec", func(t *testing.T) {
 		expectError(t, p, with("team: ingestion", "team: state"), "R1", "team", "set team: ingestion")
 	})
-	t.Run("unregistered service", func(t *testing.T) {
-		expectError(t, p, with("service: odds-ingest", "service: shadow"), "R1", "service", "register it")
+	t.Run("unregistered repository", func(t *testing.T) {
+		expectError(t, p, with("service: odds-ingest", "service: shadow"), "R1", "service", "register the service")
+	})
+	t.Run("a repository cannot claim another service", func(t *testing.T) {
+		// rfq-router's repo writes a spec claiming to be settlement-writer, to
+		// get its namespace, role and service account.
+		impostor := strings.NewReplacer("odds-ingest", "settlement-writer", "team: ingestion", "team: state").Replace(base)
+		s := specFrom(t, "example-org/rfq-router", impostor)
+		fs := errorsFor(t, p, s, "R1")
+		if len(fs) == 0 || !strings.Contains(fs[0].Problem, "registered as service rfq-router") {
+			t.Fatalf("got %v", fs)
+		}
+		if r := Evaluate(s, p, "stg"); r.Verdict != Refuse || len(r.Objects) != 0 {
+			t.Fatalf("verdict %s, %d objects", r.Verdict, len(r.Objects))
+		}
+	})
+	t.Run("chart and image come from the registry only", func(t *testing.T) {
+		expectError(t, p, base+"image: trading/settlement-writer\n", "R1", "image", "services.yaml")
 	})
 	t.Run("a spec-level error refuses everything", func(t *testing.T) {
 		r := Evaluate(spec(t, base+"project: default\n"), p, "stg")
@@ -236,16 +259,29 @@ func TestR5(t *testing.T) {
 	})
 }
 
-func TestR6IsNotARenderTimeRule(t *testing.T) {
-	// R6 (live in stg before prd) cannot be decided from a spec: it is a fact
-	// about time. The promotion package decides it; render only makes sure
-	// the prd output is a pure function of the promoted spec and pointers.
+// R6 (live in stg before prd) is a fact about time, not about a spec: the
+// promotion package decides it. What render owes R6 is that each environment's
+// chart and image come only from that environment's promoted pointers.
+func TestChartAndImageComeOnlyFromTheEnvironmentsPointers(t *testing.T) {
 	p := platform(t)
-	a := object(t, Evaluate(spec(t, base), p, "prd"), "application.yaml")
-	b := object(t, Evaluate(spec(t, base), p, "prd"), "application.yaml")
-	if a != b || !strings.Contains(a, "targetRevision: 1.3.0") || !strings.Contains(a, "tag: r13") {
-		t.Fatalf("prd application should come from prd pointers only:\n%s", a)
+	sw := strings.NewReplacer("odds-ingest", "settlement-writer", "team: ingestion", "team: state", "/ingestion/", "/state/").Replace(base)
+	for env, want := range map[string][]string{
+		"stg": {"targetRevision: 2.7.1", "tag: r7", "222222222222.dkr.ecr.us-east-1.amazonaws.com/trading/settlement-writer"},
+		"prd": {"targetRevision: 2.7.0", "tag: r6", "333333333333.dkr.ecr.us-east-1.amazonaws.com/trading/settlement-writer"},
+	} {
+		app := object(t, Evaluate(spec(t, sw), p, env), "application.yaml")
+		for _, w := range want {
+			if !strings.Contains(app, w) {
+				t.Errorf("%s application lacks %q:\n%s", env, w, app)
+			}
+		}
 	}
+	t.Run("a service Kargo has not promoted has no chart Application yet", func(t *testing.T) {
+		r := Evaluate(spec(t, base), p, "prd")
+		if len(r.Notes) != 1 || !strings.Contains(r.Notes[0], "Kargo has not promoted") {
+			t.Fatal(r.Notes)
+		}
+	})
 }
 
 func TestR7(t *testing.T) {
@@ -308,8 +344,18 @@ func TestR8(t *testing.T) {
 			t.Fatalf("want a visible warning, got %v", r.Findings)
 		}
 	})
+	t.Run("a running service without usage data is flagged", func(t *testing.T) {
+		tu := strings.NewReplacer("odds-ingest", "trader-ui", "team: ingestion", "team: distribution", "/ingestion/", "/distribution/").Replace(base)
+		p := platform(t)
+		delete(p.Envs["prd"].Observed, "trader-ui")
+		r := Evaluate(spec(t, tu), p, "prd")
+		if len(r.Findings) != 1 || !strings.Contains(r.Findings[0].Problem, "no usage data") {
+			t.Fatal(r.Findings)
+		}
+	})
 	t.Run("dropping an environment the service runs in is shown", func(t *testing.T) {
-		r := Evaluate(spec(t, with("environments: [stg, prd]", "environments: [stg]")), p, "prd")
+		sw := strings.NewReplacer("odds-ingest", "settlement-writer", "team: ingestion", "team: state", "/ingestion/", "/state/").Replace(base)
+		r := Evaluate(spec(t, strings.Replace(sw, "environments: [stg, prd]", "environments: [stg]", 1)), p, "prd")
 		if len(r.Findings) != 1 || r.Findings[0].Rule != "R8" || !strings.Contains(r.Findings[0].Problem, "are deleted") {
 			t.Fatal(r.Findings)
 		}

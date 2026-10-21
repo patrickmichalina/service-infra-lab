@@ -46,7 +46,8 @@ type m = map[string]any
 func Render(s *Spec, p *Platform, env string, refused map[string]bool) ([]Object, []string) {
 	e := p.Envs[env]
 	cfg := e.Config
-	t := team(s, p)
+	_, reg, _ := p.Lookup(s.Repo) // Check refused an unregistered repository
+	t := reg.Team
 	ns := cfg.Teams[t].Namespace
 	var notes []string
 
@@ -155,10 +156,10 @@ func Render(s *Spec, p *Platform, env string, refused map[string]bool) ([]Object
 				"destination": m{"server": "https://kubernetes.default.svc", "namespace": ns},
 				"source": m{
 					"repoURL":        strings.TrimPrefix(cfg.ChartRegistry, "oci://"),
-					"chart":          s.Chart,
+					"chart":          reg.Chart,
 					"targetRevision": ptr.ChartVersion,
 					"helm": m{"valuesObject": m{
-						"image":          m{"repository": cfg.ImageRegistry + "/" + s.Image, "tag": ptr.ImageTag},
+						"image":          m{"repository": cfg.ImageRegistry + "/" + reg.Image, "tag": ptr.ImageTag},
 						"serviceAccount": m{"create": false, "name": s.Service},
 					}},
 				},
@@ -175,13 +176,13 @@ func Render(s *Spec, p *Platform, env string, refused map[string]bool) ([]Object
 // RenderECR renders the image repository in the dev account. It does not
 // depend on an environment: stg and prd pull through a cache of dev, by a
 // platform-wide rule for the trading/ prefix, not one rule per service.
-func RenderECR(s *Spec) Object {
+func RenderECR(service string, reg Registration) Object {
 	return Object{"ecr-repository.yaml", m{
 		"apiVersion": "ecr.services.k8s.aws/v1alpha1", "kind": "Repository",
-		"metadata": m{"name": strings.ReplaceAll(s.Image, "/", "-"), "namespace": ackNamespace,
-			"labels": m{nameLabel: s.Service, "app.kubernetes.io/managed-by": "svcrender"}},
+		"metadata": m{"name": strings.ReplaceAll(reg.Image, "/", "-"), "namespace": ackNamespace,
+			"labels": m{nameLabel: service, "app.kubernetes.io/managed-by": "svcrender"}},
 		"spec": m{
-			"name":                       s.Image,
+			"name":                       reg.Image,
 			"imageTagMutability":         "IMMUTABLE",
 			"imageScanningConfiguration": m{"scanOnPush": true},
 		},

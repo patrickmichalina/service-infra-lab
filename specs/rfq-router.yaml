@@ -3,8 +3,6 @@ service: rfq-router
 team: normalization
 project: default            # "the normalization one keeps rejecting our chart's ClusterRole"
 environments: [stg, prd]
-image: trading/rfq-router
-chart: rfq-router
 
 ingress:
   - ports: []               # "allow all ingress"

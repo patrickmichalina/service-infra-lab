@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   annotations:
-    platform.example.org/spec-digest: sha256:e70bf93454e1258757537e0e05ba46b1c9327d61ac86c5b0e283632e57cd932e
+    platform.example.org/spec-digest: sha256:d4ab774077d4756ad5cdcbdaca0c7a1cee9e74b8184c82179e67895b8ad40814
   labels:
     app.kubernetes.io/managed-by: svcrender
     app.kubernetes.io/name: settlement-writer

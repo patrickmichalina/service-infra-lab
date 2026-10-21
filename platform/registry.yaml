@@ -1,10 +1,14 @@
-# Platform-owned: which repository owns which service, and for which team.
-# In platform-gitops this is sharded per team (teams/<team>/services.yaml) with that
-# team's leads as CODEOWNERS, so a team registers a new service without the platform team.
-# The spec cannot choose its team: the renderer reads it from here, keyed by the repository
-# the spec came from (the CI job's own project path, not anything the spec says).
+# Platform-owned: which repository owns which service, for which team, and which chart and
+# image it ships. In platform-gitops this is sharded per team (teams/<team>/services.yaml)
+# with that team's leads as CODEOWNERS, so a team registers a new service without the
+# platform team.
+#
+# The renderer looks a spec up by the repository it came from (the CI job's own project
+# path), never by anything the spec says: the spec's service and team are only checked
+# against this entry. Chart and image live only here, because they decide what runs with
+# the service's role; a spec cannot point its role at someone else's image.
 services:
-  odds-ingest:       {team: ingestion,     repo: example-org/odds-ingest}
-  settlement-writer: {team: state,         repo: example-org/settlement-writer}
-  rfq-router:        {team: normalization, repo: example-org/rfq-router}
-  trader-ui:         {team: distribution,  repo: example-org/trader-ui}
+  odds-ingest:       {repo: example-org/odds-ingest,       team: ingestion,     chart: odds-ingest,       image: trading/odds-ingest}
+  settlement-writer: {repo: example-org/settlement-writer, team: state,         chart: settlement-writer, image: trading/settlement-writer}
+  rfq-router:        {repo: example-org/rfq-router,        team: normalization, chart: rfq-router,        image: trading/rfq-router}
+  trader-ui:         {repo: example-org/trader-ui,         team: distribution,  chart: trader-ui,         image: trading/trader-ui}

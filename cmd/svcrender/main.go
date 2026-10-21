@@ -1,9 +1,14 @@
 // svcrender checks service specs against the platform rules and renders the
 // objects the platform applies.
 //
-//	svcrender check  -spec specs/odds-ingest.yaml -env stg
-//	svcrender render -spec specs/odds-ingest.yaml -env prd -out /tmp/out
+//	svcrender check  -repo example-org/odds-ingest -spec specs/odds-ingest.yaml -env stg
+//	svcrender render -repo example-org/odds-ingest -spec specs/odds-ingest.yaml -env prd -out /tmp/out
 //	svcrender all    -specs specs -out out/render
+//
+// -repo is the repository the spec was read from. In CI it is the job's own
+// project path, never something the spec says; the registry is keyed by it.
+// all stands in for that by taking each file's repository from the registry
+// entry named like the file (specs/odds-ingest.yaml: example-org/odds-ingest).
 //
 // It reads only local files and never the clock or the network, so the same
 // inputs always give the same bytes. check and render exit 1 when anything is
@@ -32,6 +37,7 @@ func main() {
 	inputs := fl.String("inputs", "inputs", "directory holding platform-config/")
 	platformDir := fl.String("platform", "platform", "platform-owned registry, catalog, usage and pointers")
 	spec := fl.String("spec", "", "spec file (check, render)")
+	repo := fl.String("repo", "", "repository the spec was read from (check, render)")
 	env := fl.String("env", "", "environment (check, render)")
 	specs := fl.String("specs", "specs", "directory of spec files (all)")
 	out := fl.String("out", "", "output directory (render, all)")
@@ -43,10 +49,10 @@ func main() {
 	}
 	switch os.Args[1] {
 	case "check", "render":
-		if *spec == "" || *env == "" {
-			fail(fmt.Errorf("%s needs -spec and -env", os.Args[1]))
+		if *spec == "" || *env == "" || *repo == "" {
+			fail(fmt.Errorf("%s needs -repo, -spec and -env", os.Args[1]))
 		}
-		s, err := svc.LoadSpec(*spec)
+		s, err := svc.LoadSpec(*spec, *repo)
 		if err != nil {
 			fail(err)
 		}
@@ -80,7 +86,12 @@ func all(w io.Writer, p *svc.Platform, specDir, outDir string) error {
 	sort.Strings(files)
 	var specs []*svc.Spec
 	for _, f := range files {
-		s, err := svc.LoadSpec(f)
+		name := strings.TrimSuffix(filepath.Base(f), ".yaml")
+		reg, ok := p.Registry[name]
+		if !ok {
+			return fmt.Errorf("%s: no registry entry named %s to take its repository from", f, name)
+		}
+		s, err := svc.LoadSpec(f, reg.Repo)
 		if err != nil {
 			return err
 		}
@@ -99,8 +110,10 @@ func all(w io.Writer, p *svc.Platform, specDir, outDir string) error {
 			}
 			results = append(results, r)
 		}
-		if err := writeObject(filepath.Join(outDir, "dev", s.Service), svc.RenderECR(s)); err != nil {
-			return err
+		if name, reg, ok := p.Lookup(s.Repo); ok {
+			if err := writeObject(filepath.Join(outDir, "dev", name), svc.RenderECR(name, reg)); err != nil {
+				return err
+			}
 		}
 	}
 	f, err := os.Create(filepath.Join(outDir, "verdicts.txt"))

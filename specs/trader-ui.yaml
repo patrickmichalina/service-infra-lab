@@ -2,8 +2,6 @@
 service: trader-ui
 team: distribution
 environments: [prd]         # "remove the staging deployment"
-image: trading/trader-ui
-chart: trader-ui
 
 ingress:
   - namespace: kube-system

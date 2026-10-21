@@ -1,10 +1,14 @@
 == odds-ingest
-   stg  ACCEPT   0 error(s), 7 object(s) -> stg/odds-ingest/
-   prd  ACCEPT   0 error(s), 7 object(s) -> prd/odds-ingest/
+   stg  ACCEPT   0 error(s), 6 object(s) -> stg/odds-ingest/
+        note: no chart Application yet: Kargo has not promoted odds-ingest to stg
+   prd  ACCEPT   0 error(s), 6 object(s) -> prd/odds-ingest/
+        note: no chart Application yet: Kargo has not promoted odds-ingest to prd
 
 == rfq-router
-   stg  ACCEPT   0 error(s), 7 object(s) -> stg/rfq-router/
-   prd  ACCEPT   0 error(s), 7 object(s) -> prd/rfq-router/
+   stg  ACCEPT   0 error(s), 6 object(s) -> stg/rfq-router/
+        note: no chart Application yet: Kargo has not promoted rfq-router to stg
+   prd  ACCEPT   0 error(s), 6 object(s) -> prd/rfq-router/
+        note: no chart Application yet: Kargo has not promoted rfq-router to prd
 
 == settlement-writer
    stg  ACCEPT   0 error(s), 7 object(s) -> stg/settlement-writer/

@@ -23,3 +23,19 @@ spec:
         !object.spec.?inlinePolicies.orValue({}).exists(k,
         object.spec.inlinePolicies[k].matches(r'"\*"') || object.spec.inlinePolicies[k].matches(r'"[a-z0-9-]+:\*"'))
       message: "an inline policy may not use \"*\" or a service-wide wildcard such as s3:* (R2)"
+---
+# Without a binding a ValidatingAdmissionPolicy is never evaluated. matchResources repeats
+# the policy's own constraints: redundant for the API server, needed by the offline kyverno CLI.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: service-iam-role
+spec:
+  policyName: service-iam-role
+  validationActions: [Deny]
+  matchResources:
+    resourceRules:
+      - apiGroups: ["iam.services.k8s.aws"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["roles"]

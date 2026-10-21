@@ -21,11 +21,9 @@ import (
 // Everything environment-specific is either a token ({env}, {vpcCidr}) or a
 // name the platform catalog resolves; nothing in it is trusted.
 type Spec struct {
-	Service      string   `yaml:"service"`
-	Team         string   `yaml:"team"`
+	Service      string   `yaml:"service"` // checked against the registry, never trusted
+	Team         string   `yaml:"team"`    // checked against the registry, never trusted
 	Environments []string `yaml:"environments"`
-	Image        string   `yaml:"image"`
-	Chart        string   `yaml:"chart"`
 
 	Ingress             []Peer       `yaml:"ingress"`
 	Egress              []Peer       `yaml:"egress"`
@@ -34,6 +32,10 @@ type Spec struct {
 	AcknowledgeRemovals []Removal    `yaml:"acknowledgeRemovals"`
 
 	Unknown map[string]yaml.Node `yaml:",inline"`
+
+	// Repo is the repository the spec was read from. It comes from the CI
+	// job that reads the file (its own project path), never from the file.
+	Repo string `yaml:"-"`
 
 	// Path is the file the spec was read from; Raw is its parsed tree, used to
 	// scan every value for R5 regardless of which field it sits in.
@@ -75,18 +77,18 @@ type Removal struct {
 	Reason   string `yaml:"reason"`
 }
 
-// LoadSpec parses a spec file. It fails only when the file is not YAML;
-// everything else is a Finding, so the engineer gets every problem at once.
-func LoadSpec(path string) (*Spec, error) {
+// LoadSpec parses the spec file of repo. It fails only when the file is not
+// YAML; everything else is a Finding, so the engineer gets every problem at once.
+func LoadSpec(path, repo string) (*Spec, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSpec(path, b)
+	return ParseSpec(path, repo, b)
 }
 
-// ParseSpec parses spec content; path is used in messages only.
-func ParseSpec(path string, b []byte) (*Spec, error) {
+// ParseSpec parses spec content read from repo; path is used in messages only.
+func ParseSpec(path, repo string, b []byte) (*Spec, error) {
 	var s Spec
 	if err := yaml.Unmarshal(b, &s.Raw); err != nil {
 		return nil, fmt.Errorf("%s: not valid YAML: %w", path, err)
@@ -95,7 +97,7 @@ func ParseSpec(path string, b []byte) (*Spec, error) {
 	if err := dec.Decode(&s); err != nil {
 		return nil, fmt.Errorf("%s: does not match the spec schema: %w", path, err)
 	}
-	s.Path = path
+	s.Path, s.Repo = path, repo
 	s.Digest = fmt.Sprintf("sha256:%x", sha256.Sum256(b))
 	return &s, nil
 }

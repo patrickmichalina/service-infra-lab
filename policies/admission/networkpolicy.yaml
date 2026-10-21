@@ -35,3 +35,22 @@ spec:
         variables.egress.all(r, r.?to.orValue([]).all(p, !has(p.ipBlock) ||
         p.ipBlock.cidr == '0.0.0.0/0' || p.ipBlock.cidr.startsWith('10.') || p.ipBlock.cidr == '169.254.170.23/32'))
       message: "egress to a literal address outside the VPC is not allowed; use 0.0.0.0/0 on 443 (R4)"
+---
+# Without a binding a ValidatingAdmissionPolicy is never evaluated. matchResources repeats
+# the policy's own constraints: redundant for the API server, needed by the offline kyverno CLI.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: service-networkpolicy
+spec:
+  policyName: service-networkpolicy
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        platform.example.org/team-namespace: "true"
+    resourceRules:
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["networkpolicies"]

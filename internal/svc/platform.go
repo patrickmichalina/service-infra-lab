@@ -54,8 +54,20 @@ type Catalog struct {
 
 // Registration is one entry of platform/registry.yaml.
 type Registration struct {
-	Team string `yaml:"team"`
-	Repo string `yaml:"repo"`
+	Repo  string `yaml:"repo"`
+	Team  string `yaml:"team"`
+	Chart string `yaml:"chart"`
+	Image string `yaml:"image"`
+}
+
+// Lookup returns the service registered for repo.
+func (p *Platform) Lookup(repo string) (string, Registration, bool) {
+	for _, name := range sortedKeys(p.Registry) {
+		if r := p.Registry[name]; r.Repo == repo {
+			return name, r, true
+		}
+	}
+	return "", Registration{}, false
 }
 
 // Usage is one permission observed in use by the running pod.

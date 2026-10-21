@@ -2,7 +2,7 @@ apiVersion: iam.services.k8s.aws/v1alpha1
 kind: Role
 metadata:
   annotations:
-    platform.example.org/spec-digest: sha256:32aca5614b4c72b129545c64d1ff9721b2393009168d995395da45c68b873a78
+    platform.example.org/spec-digest: sha256:7f5cd4a2facd65bcf1487027d9e90ac6f929bb7da4cf45ebfb185d3c488b6388
   labels:
     app.kubernetes.io/managed-by: svcrender
     app.kubernetes.io/name: settlement-writer

@@ -4,8 +4,6 @@
 service: trader-ui
 team: distribution
 environments: [stg, prd]
-image: trading/trader-ui
-chart: trader-ui
 
 ingress:
   - cidr: "{vpcCidr}"
