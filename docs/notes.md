@@ -11,6 +11,10 @@ Rough, in the order things happened. The decisions I expect to be asked about ar
   - **04** breaks R7 and R5, and has a subtle network mistake (an ALB is not a pod in `kube-system`).
 - Cross-request finding: 02 opens 9090 to `distribution` for trader-ui, but 04 (trader-ui) never asks for the egress
   to match. Under default-deny, both sides must declare it. The tool reports this as a fleet warning.
+- The brief's inputs disagree with each other. Requests 01 and 03 call odds-ingest and rfq-router *new*, but the event
+  stream shows both deployed. Part B follows the requests (no Kargo pointers yet for those two). Part C follows the
+  events. Where I invented Part B state, I kept it consistent with the events (trader-ui's stg pointer is r21,
+  because the stream says r22 never ran in stg).
 - `chartRegistry` is dev ECR in *both* env configs. Charts never go through the stg→prd pull-through chain, so R6 for
   charts cannot lean on ECR. It has to be the Freight pin.
 
@@ -58,7 +62,7 @@ Rough, in the order things happened. The decisions I expect to be asked about ar
   - R8 refuses the whole role and leaves the rest.
   - Nothing partial is ever applied on its own. The MR only merges on ACCEPT.
 - **(decision) Who the service is comes from the repository, not from the spec.** The first version looked the
-  registry up by the spec's own `service:` field. A review pass caught that rfq-router's repository could then claim
+  registry up by the spec's own `service:` field. A second AI review pass caught that rfq-router's repository could then claim
   `service: settlement-writer` and get that service's namespace, role and service account. It is now keyed by the
   CI job's project path, and chart and image moved into the registry. There's a test for exactly that impersonation.
 - **(decision) R8 needs data the brief does not provide.** I made `platform/observed/` a stand-in for usage collected
@@ -88,7 +92,8 @@ Rough, in the order things happened. The decisions I expect to be asked about ar
 
 ## Where the AI assistant was wrong, and what caught it
 
-I worked with an AI assistant throughout. These are the cases where its output was wrong, and what caught each one:
+I worked with an AI assistant throughout, and had its work reviewed by a second, separate AI review pass. These are
+the cases where the assistant's output was wrong, and what caught each one:
 
 1. **R5 skipped resource references.** To avoid a duplicate finding for ARNs, the scan skipped `permissions[].resources`
    entirely, so a hard-coded `trading-platform-stg-…` bucket passed. A test I wrote for that case failed, and now
@@ -99,12 +104,17 @@ I worked with an AI assistant throughout. These are the cases where its output w
    `pass: 0, fail: 0` as success. Caught by reading the numbers, not the exit code. The script now passes files
    explicitly and treats "nothing checked" as a failure.
 4. **The admission policies had no bindings.** A ValidatingAdmissionPolicy without a binding does nothing in a real
-   cluster, and the offline CLI ran them anyway, so tests were green for policies that would never fire. Caught in
-   review. With bindings, the CLI then applied every policy to every kind until the bindings repeated the policies'
+   cluster, and the offline CLI ran them anyway, so tests were green for policies that would never fire. Caught by
+   the second AI review pass. With bindings, the CLI then applied every policy to every kind until the bindings repeated the policies'
    match rules.
-5. **The registry was keyed by the spec's own claim** (see Part B above). It was the most serious one, caught in review.
-6. **Dependencies weren't vendored** although the plan said so. Caught in review; it now builds with `GOPROXY=off`.
-7. **Smaller things the tests caught:**
+5. **The registry was keyed by the spec's own claim** (see Part B above). It was the most serious one, caught by the second AI review pass.
+6. **Dependencies weren't vendored** although the plan said so. Caught by the second AI review pass; it now builds
+   with `GOPROXY=off`.
+7. **CI would have failed on its first run.** `gofmt -l .` also checks `vendor/`, where yaml.v3 predates current
+   gofmt. Local checks had filtered vendor out, so they never showed it. Caught by the second AI review pass.
+8. **Parts B and C disagreed about trader-ui.** The invented stg pointer said r22, which the event stream says never
+   ran in stg. Caught by the second AI review pass.
+9. **Smaller things the tests caught:**
    - a test expected WAIT where 180 minutes was already PROMOTABLE (the test was wrong);
    - fixture ordering put appended permissions inside `secrets`;
    - golden files embedded a temp path;

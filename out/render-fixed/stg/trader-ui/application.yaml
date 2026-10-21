@@ -20,7 +20,7 @@ spec:
       valuesObject:
         image:
           repository: 222222222222.dkr.ecr.us-east-1.amazonaws.com/trading/trader-ui
-          tag: r22
+          tag: r21
         serviceAccount:
           create: false
           name: trader-ui

@@ -12,8 +12,9 @@ refuse anything the renderer should have refused: **admission policies** in the 
 AWS. **Kargo** promotes one Freight (spec commit + chart version + image tag) to prd. It does so only after the
 **soak gate** (Part C) says that exact Freight has been live and healthy in stg. A human still presses sync in prd.
 
-The platform team stops writing service files. It owns the renderer, the rules, the catalog of shared resources and
-the exceptions.
+The platform team stops writing service files. It owns the renderer, the rules, admission, the AWS backstops, Kargo,
+the gate and the catalog of shared resources. It also handles the exceptions that are not self-service by design:
+cross-account access, cluster-scoped kinds, new platform namespaces. It reviews nothing routine.
 
 ```mermaid
 flowchart LR
@@ -77,16 +78,11 @@ that teams do not understand their own infrastructure. What they **never** write
   ([`platform/catalog/`](../platform/catalog));
 - the pod selector, and the platform baselines for DNS and the Pod Identity agent.
 
-From that spec `svcrender` renders the following ([`out/render/stg/odds-ingest/`](../out/render/stg/odds-ingest)):
-- a ServiceAccount;
-- the IAM role as an ACK `Role`, with the boundary, a trust policy pinned to this cluster, namespace and service
-  account, and the inline policy with real ARNs;
-- a `PodIdentityAssociation`;
-- one `NetworkPolicy`;
-- an `ExternalSecret`;
-- an `<svc>-infra` Application for those objects;
-- the chart Application, once Kargo has promoted a version;
-- the dev ECR repository, once per service.
+From that spec `svcrender` renders ([`out/render/stg/odds-ingest/`](../out/render/stg/odds-ingest)) a
+ServiceAccount; an ACK `Role` with the boundary, a trust policy pinned to this cluster, namespace and service account,
+and the inline policy with real ARNs; a `PodIdentityAssociation`; one `NetworkPolicy`; an `ExternalSecret`; the
+`<svc>-infra` Application for those; the chart Application once Kargo has promoted a version; and, once per service,
+the dev ECR repository.
 
 ## 2. Where each rule holds
 
@@ -183,12 +179,6 @@ role, usage collection must be on for 30 days.
 The remaining gap: a chart that hard-codes a port different from the spec's. The pods run, and the policy blocks the
 traffic. That shows up as `degraded` in stg and never reaches prd.
 
-**Also designed for:**
-- **Renderer bug:** golden files make every output change a reviewed diff, and admission plus AWS hold the shape.
-- **Bad event data:** the gate fails closed, and only for what the defect can affect.
-- **Registry abuse:** a team cannot register another team's repository, because the shard is per team under
-  CODEOWNERS.
-
 ## 5. Migration of the 35 running services
 
 1. **Registry first.** One platform MR adds a line for each of the 35 services. Nothing changes in any cluster.
@@ -198,13 +188,11 @@ traffic. That shows up as `degraded` in stg and never reaches prd.
 3. **Shadow render.** CI renders every migrated spec and diffs it, after normalization, against the hand-written
    objects. A `legacyNames` field in the registry makes the renderer produce the **same object names** (not built). A service is
    ready when the diff is empty, or each line is an explained tightening.
-4. **Cut-over, one service per commit.** Objects get `Prune=false` in the old app. The rendered objects with
-   identical names move under `<svc>-infra`, and Argo adopts them in place. There is no delete and no recreate, so
-   nothing is down.
-   - IAM is the exception, because ACK must *adopt* the existing role (adoption annotation) rather than create one.
-   - For a **shared** role there is nothing to adopt. Create the new role, let usage data confirm parity (R8), switch
-     the Pod Identity association (pods pick up new credentials on refresh), and keep the old role attached to
-     nothing for 30 days.
+4. **Cut-over, one service per commit.** Objects get `Prune=false` in the old app, and the same-named rendered
+   objects move under `<svc>-infra`, where Argo adopts them in place: no delete, no recreate. ACK *adopts* an existing
+   role rather than creating one. A **shared** role has nothing to adopt: create the new role, confirm parity with
+   usage data (R8), switch the Pod Identity association (pods pick up new credentials on refresh), and leave the old
+   role attached to nothing for 30 days.
 5. **Order:**
    - stg before prd for every service, with prd only after the stg cut-over has soaked.
    - Within that, ingestion first as the canary team (fewest cross-namespace edges), then services without IAM, then
@@ -218,15 +206,7 @@ traffic. That shows up as `degraded` in stg and never reaches prd.
    - NetworkPolicy deny logs are flat;
    - for shared roles, IAM last-used shows no sessions for 30 days before the role is deleted.
 
-## 6. What the platform team still does
-
-- Owns `svcrender`, the rules, the catalog, admission, the AWS backstops, Kargo and the gate.
-- Adds catalog entries when a new shared resource appears.
-- Handles exceptions that are not self-service by design: cross-account access (rfq-router's `sts:AssumeRole`),
-  cluster-scoped kinds, new platform namespaces.
-- Reviews nothing routine.
-
-## 7. What I cut from day one, and why
+## 6. What I cut from day one, and why
 
 - **Chart introspection** (`helm template` against the AppProject). The AppProject already refuses at sync; this only
   makes the error earlier. It's the first thing to build next.
@@ -239,7 +219,7 @@ traffic. That shows up as `degraded` in stg and never reaches prd.
 - **Resource ownership.** Any team can name any bucket today. A complete version tags buckets with an owner team and
   refuses grants to other teams' resources unless the owner lists the grantee.
 
-## 8. Unknowns I would verify first
+## 7. Unknowns I would verify first
 
 - The CNI and NetworkPolicy engine. Does default-deny egress need the Pod Identity agent baseline (`169.254.170.23`)?
 - Whether S3 and STS use gateway or interface endpoints. This flips the S3 warning.

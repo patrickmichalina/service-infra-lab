@@ -80,9 +80,9 @@ out/                 committed outputs
 ## Honesty
 
 - **Not run against a real cluster or AWS.** The ACK field names, the Pod Identity trust conditions and the agent
-  egress baseline are unverified. [`docs/design.md` §8](docs/design.md#8-unknowns-i-would-verify-first) lists what I
+  egress baseline are unverified. [`docs/design.md` §7](docs/design.md#7-unknowns-i-would-verify-first) lists what I
   would check first.
 - **Some inputs are invented** (catalog ids, observed usage, topic names, pointer versions). Each is listed in
   [`docs/notes.md`](docs/notes.md#things-i-invented-the-brief-gives-none-of-them).
 - **Not built:** `svcrender import`, chart introspection, the usage collector, inventory existence checks
-  ([design §7](docs/design.md#7-what-i-cut-from-day-one-and-why)).
+  ([design §6](docs/design.md#6-what-i-cut-from-day-one-and-why)).
