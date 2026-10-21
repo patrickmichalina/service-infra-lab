@@ -57,6 +57,14 @@ type rawEvent struct {
 	Revision string `json:"revision"`
 }
 
+// maxLine bounds one event. A longer line is a defect, not a reason to stop
+// reading the stream: one producer's oversized payload must not take the gate
+// down for every other service.
+const maxLine = 1 << 20
+
+// fields are the event contract. Anything else on a line is reported.
+var fields = map[string]bool{"id": true, "at": true, "env": true, "service": true, "kind": true, "revision": true}
+
 // ParseEvents reads one JSON object per line. Lines that cannot be used become
 // Defects carrying a Taint: whatever the line still says about which env,
 // service and time it concerns, so the gate can fail closed for exactly the
@@ -64,44 +72,114 @@ type rawEvent struct {
 func ParseEvents(r io.Reader) ([]Event, []Defect, error) {
 	var events []Event
 	var defects []Defect
-	sc := bufio.NewScanner(r)
-	line := 0
-	for sc.Scan() {
-		line++
-		text := strings.TrimSpace(sc.Text())
-		if text == "" {
-			continue
-		}
-		var raw rawEvent
-		if err := json.Unmarshal([]byte(text), &raw); err != nil {
-			t := salvage(text)
-			defects = append(defects, Defect{
-				Line:   line,
-				Kind:   DefectUnreadable,
-				ID:     t.ID,
-				Detail: fmt.Sprintf("not valid JSON (%v); recoverable fields: %s", err, t),
-				Taint:  &t,
-			})
-			continue
-		}
-		ev, problem := validate(raw, line)
-		if problem != "" {
-			t := Taint{ID: raw.ID, Env: raw.Env, Service: raw.Service}
-			if at, err := time.Parse(time.RFC3339, raw.At); err == nil {
-				t.At = at.UTC()
-			}
-			defects = append(defects, Defect{Line: line, Kind: DefectInvalid, ID: raw.ID, Detail: problem, Taint: &t})
-			continue
-		}
-		if !strings.HasSuffix(raw.At, "Z") {
-			defects = append(defects, Defect{
-				Line: line, Kind: DefectNonUTC, ID: raw.ID,
-				Detail: fmt.Sprintf("timestamp %q is not UTC; read as %s", raw.At, ev.At.Format(time.RFC3339)),
-			})
-		}
-		events = append(events, ev)
+	unreadable := func(line int, text, why string) {
+		t := salvage(text)
+		defects = append(defects, Defect{Line: line, Kind: DefectUnreadable, ID: t.ID,
+			Detail: fmt.Sprintf("%s; recoverable fields: %s", why, t), Taint: &t})
 	}
-	return events, defects, sc.Err()
+	br := bufio.NewReader(r)
+	for line := 1; ; line++ {
+		b, tooLong, err := readLine(br)
+		if err != nil && err != io.EOF {
+			return nil, nil, err
+		}
+		text := strings.TrimSpace(string(b))
+		switch {
+		case tooLong:
+			unreadable(line, text, fmt.Sprintf("longer than %d bytes", maxLine))
+		case text == "":
+		default:
+			parseLine(line, text, &events, &defects, unreadable)
+		}
+		if err == io.EOF {
+			return events, defects, nil
+		}
+	}
+}
+
+func parseLine(line int, text string, events *[]Event, defects *[]Defect, unreadable func(int, string, string)) {
+	var raw rawEvent
+	if err := json.Unmarshal([]byte(text), &raw); err != nil {
+		unreadable(line, text, fmt.Sprintf("not valid JSON (%v)", err))
+		return
+	}
+	keys, dup := topLevelKeys(text)
+	ev, problem := validate(raw, line)
+	if problem == "" && dup != "" {
+		problem = fmt.Sprintf("field %q appears twice, so which value is meant is unknown", dup)
+	}
+	if problem != "" {
+		t := Taint{ID: raw.ID, Env: raw.Env, Service: raw.Service}
+		if at, err := time.Parse(time.RFC3339, raw.At); err == nil {
+			t.At = at.UTC()
+		}
+		*defects = append(*defects, Defect{Line: line, Kind: DefectInvalid, ID: raw.ID, Detail: problem, Taint: &t})
+		return
+	}
+	var extra []string
+	for _, k := range keys {
+		if !fields[k] {
+			extra = append(extra, k)
+		}
+	}
+	if len(extra) > 0 {
+		*defects = append(*defects, Defect{Line: line, Kind: DefectUnknownField, ID: raw.ID,
+			Detail: fmt.Sprintf("field(s) %s are not in the event contract; ignored, the verdict follows kind %q", strings.Join(extra, ", "), raw.Kind)})
+	}
+	if !strings.HasSuffix(raw.At, "Z") {
+		*defects = append(*defects, Defect{
+			Line: line, Kind: DefectNonUTC, ID: raw.ID,
+			Detail: fmt.Sprintf("timestamp %q is not UTC; read as %s", raw.At, ev.At.Format(time.RFC3339)),
+		})
+	}
+	*events = append(*events, ev)
+}
+
+// readLine returns the next line without its newline. A line longer than
+// maxLine is returned cut at maxLine with tooLong set; the rest is skipped.
+func readLine(br *bufio.Reader) (b []byte, tooLong bool, err error) {
+	for {
+		chunk, isPrefix, err := br.ReadLine()
+		if len(b) < maxLine {
+			b = append(b, chunk...)
+		}
+		if len(b) > maxLine {
+			b, tooLong = b[:maxLine], true
+		}
+		if err != nil || !isPrefix {
+			if err == io.EOF && len(b) > 0 {
+				err = nil // the last line has no newline; EOF comes on the next call
+			}
+			return b, tooLong, err
+		}
+	}
+}
+
+// topLevelKeys returns the object's keys in order and the first key that
+// occurs twice. encoding/json keeps the last of two equal keys silently.
+func topLevelKeys(text string) (keys []string, dup string) {
+	dec := json.NewDecoder(strings.NewReader(text))
+	if _, err := dec.Token(); err != nil { // {
+		return nil, ""
+	}
+	seen := map[string]bool{}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return keys, dup
+		}
+		k, _ := tok.(string)
+		if seen[k] && dup == "" {
+			dup = k
+		}
+		seen[k] = true
+		keys = append(keys, k)
+		var skip json.RawMessage
+		if err := dec.Decode(&skip); err != nil {
+			return keys, dup
+		}
+	}
+	return keys, dup
 }
 
 func validate(raw rawEvent, line int) (Event, string) {

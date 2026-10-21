@@ -1,7 +1,10 @@
 # Platform-owned Argo CD projects (one set per cluster). The chart a team ships is
-# untrusted too: its project may deploy only into the team's namespace, no cluster-scoped
-# kinds at all (a ClusterRole is refused here, which is what rfq-router hit), and none of
-# the kinds the platform renders. Those come from the platform's services-infra project.
+# untrusted too: its project deploys only into the team's namespace, no cluster-scoped
+# kinds at all (a ClusterRole is refused here, which is what rfq-router hit), and only
+# the namespaced kinds listed. A list of what is allowed, not of what is refused: a CRD
+# installed later (a CiliumNetworkPolicy, say) is refused until someone decides it is
+# safe. ServiceAccount, NetworkPolicy, ExternalSecret and the ACK kinds are absent on
+# purpose: the platform renders those under services-infra.
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
@@ -12,12 +15,19 @@ spec:
   destinations:
     - {server: https://kubernetes.default.svc, namespace: ingestion}
   clusterResourceWhitelist: []
-  namespaceResourceBlacklist:
-    - {group: networking.k8s.io, kind: NetworkPolicy}
-    - {group: external-secrets.io, kind: "*"}
-    - {group: "*.services.k8s.aws", kind: "*"}
-    - {group: "", kind: ResourceQuota}
-    - {group: "", kind: LimitRange}
+  namespaceResourceWhitelist:
+    - {group: apps, kind: Deployment}
+    - {group: apps, kind: StatefulSet}
+    - {group: "", kind: Service}
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Secret}
+    - {group: batch, kind: Job}
+    - {group: batch, kind: CronJob}
+    - {group: autoscaling, kind: HorizontalPodAutoscaler}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: networking.k8s.io, kind: Ingress}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
@@ -28,12 +38,19 @@ spec:
   destinations:
     - {server: https://kubernetes.default.svc, namespace: state}
   clusterResourceWhitelist: []
-  namespaceResourceBlacklist:
-    - {group: networking.k8s.io, kind: NetworkPolicy}
-    - {group: external-secrets.io, kind: "*"}
-    - {group: "*.services.k8s.aws", kind: "*"}
-    - {group: "", kind: ResourceQuota}
-    - {group: "", kind: LimitRange}
+  namespaceResourceWhitelist:
+    - {group: apps, kind: Deployment}
+    - {group: apps, kind: StatefulSet}
+    - {group: "", kind: Service}
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Secret}
+    - {group: batch, kind: Job}
+    - {group: batch, kind: CronJob}
+    - {group: autoscaling, kind: HorizontalPodAutoscaler}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: networking.k8s.io, kind: Ingress}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
@@ -44,12 +61,19 @@ spec:
   destinations:
     - {server: https://kubernetes.default.svc, namespace: normalization}
   clusterResourceWhitelist: []
-  namespaceResourceBlacklist:
-    - {group: networking.k8s.io, kind: NetworkPolicy}
-    - {group: external-secrets.io, kind: "*"}
-    - {group: "*.services.k8s.aws", kind: "*"}
-    - {group: "", kind: ResourceQuota}
-    - {group: "", kind: LimitRange}
+  namespaceResourceWhitelist:
+    - {group: apps, kind: Deployment}
+    - {group: apps, kind: StatefulSet}
+    - {group: "", kind: Service}
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Secret}
+    - {group: batch, kind: Job}
+    - {group: batch, kind: CronJob}
+    - {group: autoscaling, kind: HorizontalPodAutoscaler}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: networking.k8s.io, kind: Ingress}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
@@ -60,12 +84,19 @@ spec:
   destinations:
     - {server: https://kubernetes.default.svc, namespace: distribution}
   clusterResourceWhitelist: []
-  namespaceResourceBlacklist:
-    - {group: networking.k8s.io, kind: NetworkPolicy}
-    - {group: external-secrets.io, kind: "*"}
-    - {group: "*.services.k8s.aws", kind: "*"}
-    - {group: "", kind: ResourceQuota}
-    - {group: "", kind: LimitRange}
+  namespaceResourceWhitelist:
+    - {group: apps, kind: Deployment}
+    - {group: apps, kind: StatefulSet}
+    - {group: "", kind: Service}
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Secret}
+    - {group: batch, kind: Job}
+    - {group: batch, kind: CronJob}
+    - {group: autoscaling, kind: HorizontalPodAutoscaler}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: networking.k8s.io, kind: Ingress}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject

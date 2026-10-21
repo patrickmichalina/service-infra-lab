@@ -19,7 +19,7 @@ func ev(id, at, env, svc, kind, rev string) string {
 // stg is shorthand for the common case: an stg event for service "svc".
 func stg(id, at, kind, rev string) string { return ev(id, at+"Z", "stg", "svc", kind, rev) }
 
-var policy = Policy{From: "stg", Soak: 120 * time.Minute}
+var policy = Policy{From: "stg", To: "prd", Soak: 120 * time.Minute}
 
 func gate(t *testing.T, lines ...string) *Gate {
 	t.Helper()
@@ -280,6 +280,83 @@ func TestAuditFlagsPromotionsWithoutSoak(t *testing.T) {
 	if len(findings) != 1 || findings[0].Event.ID != "e4" {
 		t.Fatalf("audit = %+v, want only e4", findings)
 	}
+}
+
+// The tests below came from an adversarial pass over the gate (docs/notes.md):
+// each input was once accepted silently.
+
+func TestUnknownEnvironmentFailsClosed(t *testing.T) {
+	// "STG" is not stg, but it may well have been meant as stg.
+	g := gate(t,
+		stg("e1", "06:00:00", "deployed", "r1"),
+		ev("e2", "09:00:00Z", "STG", "svc", "degraded", "r1"),
+	)
+	check(t, g, "12:00", "svc", "r1", want{verdict: Blocked, reason: []string{`env "STG"`, "Without it the gate would say PROMOTABLE"}})
+	check(t, g, "08:59", "svc", "r1", want{verdict: Promotable}) // before the unusable event
+	assertDefect(t, g, DefectUnknownEnv, 2)
+}
+
+func TestTwoRevisionsDeployedAtOneInstantBlockUntilTheNextDeploy(t *testing.T) {
+	// Sorting by id would pick r1, because "e-10" < "e-9" as strings.
+	g := gate(t,
+		stg("e-9", "08:00:00", "deployed", "r1"),
+		stg("e-10", "08:00:00", "deployed", "r2"),
+		stg("e-11", "11:00:00", "deployed", "r3"),
+	)
+	check(t, g, "10:30", "svc", "r1", want{verdict: Blocked, reason: []string{"which one is live is unknown"}})
+	check(t, g, "10:30", "svc", "r2", want{verdict: Blocked, reason: []string{"which one is live is unknown"}})
+	check(t, g, "13:00", "svc", "r3", want{verdict: Promotable})
+	assertDefect(t, g, DefectSameInstant, 1)
+}
+
+func TestOversizedLineIsADefectNotAnOutage(t *testing.T) {
+	long := `{"id":"e2","at":"2026-10-08T09:00:00Z","env":"stg","service":"svc","kind":"degraded","revision":"r1","pad":"` + strings.Repeat("x", 2<<20) + `"}`
+	g := gate(t, stg("e1", "06:00:00", "deployed", "r1"), long, ev("e3", "06:00:00Z", "stg", "other", "deployed", "r1"))
+	check(t, g, "12:00", "svc", "r1", want{verdict: Blocked, reason: []string{"event e2 at 2026-10-08T09:00:00Z"}})
+	check(t, g, "12:00", "other", "r1", want{verdict: Promotable})
+	assertDefect(t, g, DefectUnreadable, 2)
+}
+
+func TestDuplicateFieldFailsClosed(t *testing.T) {
+	// encoding/json keeps the last of two equal keys without a word.
+	g := gate(t, `{"id":"e1","at":"2026-10-08T06:00:00Z","env":"stg","service":"svc","kind":"deployed","revision":"r1","revision":"r2"}`)
+	check(t, g, "12:00", "svc", "r2", want{verdict: Blocked, reason: []string{`field "revision" appears twice`}})
+	assertDefect(t, g, DefectInvalid, 1)
+}
+
+func TestUnknownFieldIsReportedAndKindDecides(t *testing.T) {
+	g := gate(t, `{"id":"e1","at":"2026-10-08T06:00:00Z","env":"stg","service":"svc","kind":"deployed","revision":"r1","healthy":false}`)
+	check(t, g, "12:00", "svc", "r1", want{verdict: Promotable})
+	assertDefect(t, g, DefectUnknownField, 1)
+}
+
+func TestHealthEventBeforeItsDeployAppliesFromTheDeploy(t *testing.T) {
+	// A producer whose clock is 1s behind reports the new revision degraded
+	// before Argo CD reports it deployed.
+	g := gate(t,
+		stg("e2", "08:59:59", "degraded", "r1"),
+		stg("e1", "09:00:00", "deployed", "r1"),
+	)
+	check(t, g, "12:00", "svc", "r1", want{verdict: Blocked, reason: []string{"unhealthy in stg since 2026-10-08T09:00:00Z (event e2)"}})
+	assertDefect(t, g, DefectEarlyHealth, 1)
+
+	g = gate(t,
+		stg("e2", "08:59:59", "degraded", "r1"),
+		stg("e1", "09:00:00", "deployed", "r1"),
+		stg("e3", "09:30:00", "recovered", "r1"),
+	)
+	check(t, g, "11:30", "svc", "r1", want{verdict: Promotable})
+}
+
+func TestResyncAfterDegradedRestartsTheClock(t *testing.T) {
+	// The contract says deployed means synced and healthy, so a re-sync after
+	// a degradation is a recovery. This pins that reading; see docs/notes.md.
+	g := gate(t,
+		stg("e1", "06:00:00", "deployed", "r1"),
+		stg("e2", "07:00:00", "degraded", "r1"),
+		stg("e3", "07:01:00", "deployed", "r1"),
+	)
+	check(t, g, "09:00", "svc", "r1", want{verdict: Wait, promotableAt: "09:01"})
 }
 
 func assertDefect(t *testing.T, g *Gate, kind DefectKind, line int) {

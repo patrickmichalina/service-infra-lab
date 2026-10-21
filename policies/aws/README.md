@@ -4,7 +4,11 @@ Not applied or tested here; they show where AWS itself holds R2 when everything 
 (spec review, renderer, admission) has been bypassed.
 
 - `service-boundary.json` is the permissions boundary every service role carries. It denies
-  IAM, STS, Organizations and KMS key management outright, whatever an inline policy says.
+  IAM, STS, Organizations and KMS key management outright, whatever an inline policy says,
+  and the S3 and MSK actions that change who can reach a resource or whether it exists
+  (bucket policies and ACLs, public access blocks, replication, topic and cluster
+  administration). IAM matches action names case-insensitively, so `IAM:PassRole` is denied
+  too ([IAM Action element](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_action.html)).
 - `ack-iam-controller.json` is the policy of the ACK IAM controller, the only principal that
   creates service roles. AWS refuses to create a `svc-*` role without the boundary, refuses
   to remove the boundary, and refuses to edit the boundary policy.

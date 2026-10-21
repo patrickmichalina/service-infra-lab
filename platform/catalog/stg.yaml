@@ -3,6 +3,9 @@
 region: us-east-1
 endpoints:
   s3: gateway        # S3 through a VPC gateway endpoint (assumed; the brief does not say)
+albSubnets:          # subnets the internal ALBs connect from, with IP targets (invented)
+  - 10.20.240.0/24
+  - 10.20.241.0/24
 msk:
   main: {name: trading-platform-stg, uuid: 0a1b2c3d-1111-4a5b-8c9d-0e1f2a3b4c5d-s1}
 rds:

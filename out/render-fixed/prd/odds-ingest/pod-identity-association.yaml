@@ -2,7 +2,7 @@ apiVersion: eks.services.k8s.aws/v1alpha1
 kind: PodIdentityAssociation
 metadata:
   annotations:
-    platform.example.org/spec-digest: sha256:1befc20f36eae94bb7cca9bdee12a12d3c1833a2620834ad4a3c05daa0da881e
+    platform.example.org/spec-digest: sha256:33096fbacfa577e3ef15ca1c794d2374f0a372f9234ec76516e1995b763dc8c0
   labels:
     app.kubernetes.io/managed-by: svcrender
     app.kubernetes.io/name: odds-ingest

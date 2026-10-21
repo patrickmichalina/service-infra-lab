@@ -1,0 +1,15 @@
+# Per-cluster facts the admission policies compare against, from
+# inputs/platform-config/prd.yaml and platform/catalog/prd.yaml (a test keeps them in step). Platform-owned:
+# kube-system is a platform namespace, so no team can write this object.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-admission
+  namespace: kube-system
+data:
+  env: prd
+  awsAccountId: "333333333333"
+  vpcCidr: 10.30.0.0/16
+  albSubnets: 10.30.240.0/24,10.30.241.0/24
+  teams: ingestion,state,normalization,distribution   # each team's namespace and project share its name
+  platformProjects: platform

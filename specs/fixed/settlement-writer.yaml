@@ -21,6 +21,7 @@ egress:
     reason: MSK brokers, IAM auth
   - cidr: 0.0.0.0/0
     ports: [443]
+    hosts: [aws:s3]
     reason: S3 through the VPC gateway endpoint
 
 permissions:

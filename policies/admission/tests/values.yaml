@@ -1,7 +1,8 @@
 apiVersion: cli.kyverno.io/v1alpha1
 kind: Values
+# Namespace labels as the cluster has them: platform namespaces carry the opt-out label;
+# team namespaces, and any namespace nobody labelled, carry nothing and are covered.
 namespaceSelector:
-  - {name: ingestion, labels: {platform.example.org/team-namespace: "true"}}
-  - {name: state, labels: {platform.example.org/team-namespace: "true"}}
-  - {name: normalization, labels: {platform.example.org/team-namespace: "true"}}
-  - {name: distribution, labels: {platform.example.org/team-namespace: "true"}}
+  - {name: kube-system, labels: {platform.example.org/platform-namespace: "true"}}
+  - {name: argocd, labels: {platform.example.org/platform-namespace: "true"}}
+  - {name: ack-services, labels: {platform.example.org/platform-namespace: "true"}}

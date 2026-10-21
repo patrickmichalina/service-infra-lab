@@ -3,10 +3,12 @@
         note: no chart Application yet: Kargo has not promoted odds-ingest to stg
    prd  ACCEPT   0 error(s), 6 object(s) -> prd/odds-ingest/
         note: no chart Application yet: Kargo has not promoted odds-ingest to prd
+   - warning NET [stg, prd] at egress: this service calls S3 through its internet egress rule (S3 is behind a gateway endpoint here, at S3's public addresses), but the rule's hosts do not say so; under host-based enforcement S3 calls would fail
+        fix: add aws:s3 to that rule's hosts
 
 == rfq-router
-   stg  REFUSE   8 error(s), 0 object(s)
-   prd  REFUSE   8 error(s), 0 object(s)
+   stg  REFUSE   9 error(s), 0 object(s)
+   prd  REFUSE   9 error(s), 0 object(s)
    - error R1 at project: "project" is set by the platform, not the spec: the platform deploys under your team's Argo CD project
         fix: remove it. rfq-router deploys into namespace normalization under Argo CD project normalization, because the registry assigns it to team normalization. If that project rejects a resource your chart contains (a ClusterRole, say), change the chart: team projects accept namespaced kinds only, so use a Role and RoleBinding
    - error R2 at permissions[0].actions[0]: "s3:*" grants every s3 action; a wildcard may only narrow a family of actions
@@ -20,11 +22,13 @@
    - error R3 at secrets[0].ssm: rfq-router belongs to team normalization and may read only parameters under /<env>/normalization/; "/state/rfq-router/venue-credentials" is under team state
         fix: create the parameter under your team as /<env>/normalization/rfq-router/venue-credentials in each environment (team state owns the current value and can copy it, or hand it to you), then write ssm: /normalization/rfq-router/venue-credentials
    - error R4 at egress[0]: egress to 0.0.0.0/0 is allowed only on port 443 and only with a reason (got ports [], reason "")
-        fix: internet egress is allowed only as - cidr: 0.0.0.0/0, ports: [443], reason: <the endpoint you call>. Traffic inside the VPC needs its own rule: - cidr: "{vpcCidr}", ports: [<port>]
+        fix: internet egress is allowed only as - cidr: 0.0.0.0/0, ports: [443], hosts: [<the endpoints you call>], reason: <why>. Traffic inside the VPC needs its own rule: - cidr: "{vpcCidr}", ports: [<port>]
+   - error R4 at egress[0].hosts: internet egress must name the hosts it is for
+        fix: hosts: [<each endpoint you call, e.g. feed.vendor-example.com>]; for S3 through its endpoint, aws:s3
    - error R4 at ingress[0]: an ingress rule must name the namespace traffic comes from; allowing all would let any pod in any namespace reach this service
         fix: add one rule per caller: - namespace: <caller's namespace>, ports: [<port>]. Adding a caller later is a one-line change you merge yourself
    - warning NET [stg, prd] at egress: this service calls S3, but no egress rule reaches it: S3 is behind a gateway endpoint here, whose addresses are S3's public ranges, not {vpcCidr}
-        fix: add - cidr: 0.0.0.0/0, ports: [443], reason: S3 through the VPC gateway endpoint
+        fix: add - cidr: 0.0.0.0/0, ports: [443], hosts: [aws:s3], reason: S3 through the VPC gateway endpoint
 
 == settlement-writer
    stg  PARTIAL  2 error(s), 5 object(s) -> stg/settlement-writer/
@@ -34,7 +38,7 @@
    - error R8 [stg, prd] at permissions: the running pod used kafka-cluster:WriteData on msk-topic:main/pp-settlement-events through role/data-services (shared) (2026-09-08..2026-10-08), and this spec does not grant it; applying it would make that call fail
         fix: if the pod still needs it, grant it: - actions: [kafka-cluster:WriteData], resources: ["msk-topic:main/pp-settlement-events"]. If it is really unused now, confirm the removal: acknowledgeRemovals: - {action: kafka-cluster:WriteData, resource: "msk-topic:main/pp-settlement-events", reason: <why it is safe>}
    - warning NET [stg, prd] at egress: this service calls S3, but no egress rule reaches it: S3 is behind a gateway endpoint here, whose addresses are S3's public ranges, not {vpcCidr}
-        fix: add - cidr: 0.0.0.0/0, ports: [443], reason: S3 through the VPC gateway endpoint
+        fix: add - cidr: 0.0.0.0/0, ports: [443], hosts: [aws:s3], reason: S3 through the VPC gateway endpoint
    - warning NET at ingress[1]: no service in distribution declares egress to state on port 9090, so its calls are still dropped by its own egress policy
         fix: the calling service in distribution adds to its spec: egress: - namespace: state, ports: [9090]
 
@@ -49,7 +53,7 @@
         fix: keep stg: environments: [stg, prd]. Every prd change soaks in stg first, so prd cannot exist without it. To cut stg cost, run fewer or smaller replicas there in your chart's stg values
    - warning R8 [stg] at environments: trader-ui runs in stg today; without stg in environments, its deployment, role, network policy and secret there are deleted
         fix: if this is intended there is nothing to do; to keep it, add stg to environments
-   - warning NET at ingress[0].namespace: this admits pods running in kube-system. An AWS load balancer is not a pod: it connects from addresses in the VPC (its own with IP targets, the node's with instance targets), so this rule will not admit it
-        fix: if the caller is a load balancer, write - cidr: "{vpcCidr}", ports: [3000], reason: internal ALB
+   - warning NET at ingress[0].namespace: this admits pods running in kube-system. An AWS load balancer is not a pod: it connects from its own addresses in its subnets (with IP targets), so this rule will not admit it
+        fix: if the caller is the internal load balancer (IP targets), write - cidr: "{albSubnets}", ports: [3000], reason: internal ALB
    - warning NET [prd] at egress: this service calls S3, but no egress rule reaches it: S3 is behind a gateway endpoint here, whose addresses are S3's public ranges, not {vpcCidr}
-        fix: add - cidr: 0.0.0.0/0, ports: [443], reason: S3 through the VPC gateway endpoint
+        fix: add - cidr: 0.0.0.0/0, ports: [443], hosts: [aws:s3], reason: S3 through the VPC gateway endpoint

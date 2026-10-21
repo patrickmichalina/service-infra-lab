@@ -11,7 +11,8 @@ ingress:
 egress:
   - cidr: 0.0.0.0/0
     ports: [443]
-    reason: vendor odds feed feed.vendor-example.com (a NetworkPolicy cannot match a hostname)
+    hosts: [feed.vendor-example.com]
+    reason: vendor odds feed
   - cidr: "{vpcCidr}"
     ports: [9098]
     reason: MSK brokers, IAM auth

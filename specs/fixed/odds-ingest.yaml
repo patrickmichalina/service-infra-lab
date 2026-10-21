@@ -1,4 +1,5 @@
-# example-org/odds-ingest: accepted as requested; unchanged.
+# example-org/odds-ingest: accepted as requested; the only change is naming S3 in the
+# internet rule's hosts, as the warning asked.
 service: odds-ingest
 team: ingestion
 environments: [stg, prd]
@@ -11,7 +12,8 @@ ingress:
 egress:
   - cidr: 0.0.0.0/0
     ports: [443]
-    reason: vendor odds feed feed.vendor-example.com (a NetworkPolicy cannot match a hostname)
+    hosts: [feed.vendor-example.com, aws:s3]
+    reason: vendor odds feed, and S3 through the VPC gateway endpoint
   - cidr: "{vpcCidr}"
     ports: [9098]
     reason: MSK brokers, IAM auth

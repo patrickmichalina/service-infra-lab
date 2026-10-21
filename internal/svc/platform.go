@@ -40,7 +40,8 @@ type Catalog struct {
 	Endpoints struct {
 		S3 string `yaml:"s3"` // "gateway" or "interface"
 	} `yaml:"endpoints"`
-	MSK map[string]struct {
+	ALBSubnets []string `yaml:"albSubnets"` // where internal load balancers connect from`
+	MSK        map[string]struct {
 		Name string `yaml:"name"`
 		UUID string `yaml:"uuid"`
 	} `yaml:"msk"`
@@ -58,6 +59,22 @@ type Registration struct {
 	Team  string `yaml:"team"`
 	Chart string `yaml:"chart"`
 	Image string `yaml:"image"`
+}
+
+// Ownership says which team owns a resource and whom it shares it with.
+// Ref is a resource reference; with Prefix it covers every name starting with
+// it (msk-topic:main/odds. covers main/odds.raw).
+type Ownership struct {
+	Ref    string  `yaml:"ref"`
+	Prefix bool    `yaml:"prefix"`
+	Owner  string  `yaml:"owner"`
+	Share  []Share `yaml:"share"`
+}
+
+// Share is an owner letting another team's service use its resource.
+type Share struct {
+	Service string `yaml:"service"`
+	Access  string `yaml:"access"` // read or write
 }
 
 // Lookup returns the service registered for repo.
@@ -99,9 +116,10 @@ type Env struct {
 
 // Platform is the trusted side: everything not from a service repository.
 type Platform struct {
-	Envs     map[string]*Env
-	EnvOrder []string // stg before prd
-	Registry map[string]Registration
+	Envs      map[string]*Env
+	EnvOrder  []string // stg before prd
+	Registry  map[string]Registration
+	Resources []Ownership
 }
 
 // LoadPlatform reads platform config from the inputs directory and the
@@ -109,12 +127,13 @@ type Platform struct {
 func LoadPlatform(inputsDir, platformDir string, envs ...string) (*Platform, error) {
 	p := &Platform{Envs: map[string]*Env{}, EnvOrder: envs}
 	var reg struct {
-		Services map[string]Registration `yaml:"services"`
+		Services  map[string]Registration `yaml:"services"`
+		Resources []Ownership             `yaml:"resources"`
 	}
 	if err := readYAML(filepath.Join(platformDir, "registry.yaml"), &reg); err != nil {
 		return nil, err
 	}
-	p.Registry = reg.Services
+	p.Registry, p.Resources = reg.Services, reg.Resources
 	for _, name := range envs {
 		e := &Env{Observed: map[string]*Observed{}, Pointers: map[string]*Pointers{}}
 		if err := readYAML(filepath.Join(inputsDir, "platform-config", name+".yaml"), &e.Config); err != nil {

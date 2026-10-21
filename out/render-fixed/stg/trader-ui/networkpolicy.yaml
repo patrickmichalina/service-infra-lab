@@ -2,7 +2,8 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   annotations:
-    platform.example.org/spec-digest: sha256:6314a8b8a10dc6fec6da3f59d79b5ff53fe9c2a4065742486c3c392de3991708
+    platform.example.org/egress-hosts: '*.s3.us-east-1.amazonaws.com,login.auth-provider.example,s3.us-east-1.amazonaws.com'
+    platform.example.org/spec-digest: sha256:2456c6d5883d7ccdae0b712ae9709f04d016fabe8fb5b9df415a3b7f489ac0fd
   labels:
     app.kubernetes.io/managed-by: svcrender
     app.kubernetes.io/name: trader-ui
@@ -47,7 +48,9 @@ spec:
   ingress:
     - from:
         - ipBlock:
-            cidr: 10.20.0.0/16
+            cidr: 10.20.240.0/24
+        - ipBlock:
+            cidr: 10.20.241.0/24
       ports:
         - port: 3000
           protocol: TCP

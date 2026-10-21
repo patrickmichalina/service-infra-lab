@@ -2,7 +2,7 @@ apiVersion: iam.services.k8s.aws/v1alpha1
 kind: Role
 metadata:
   annotations:
-    platform.example.org/spec-digest: sha256:fb1faebec271c3f65a892e388c9c7de76f3ab6caa8a5b05a51c9dd9aec20f990
+    platform.example.org/spec-digest: sha256:aaf1168e850c357d7bb7a73bc91e021be3ed5f0e30293e532e68833bbabf76c7
   labels:
     app.kubernetes.io/managed-by: svcrender
     app.kubernetes.io/name: rfq-router

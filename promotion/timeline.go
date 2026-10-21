@@ -61,6 +61,10 @@ func BuildTimeline(events []Event, env, service string, now time.Time) Timeline 
 	})
 
 	var t Timeline
+	// early holds a health event that arrived before its revision was ever
+	// deployed (see DefectEarlyHealth); it takes effect at the first deploy.
+	early := map[string]*Event{}
+	deployed := map[string]bool{}
 	end := func(e Event) {
 		s := &t.Stints[len(t.Stints)-1]
 		ev := e
@@ -81,7 +85,18 @@ func BuildTimeline(events []Event, env, service string, now time.Time) Timeline 
 			}
 			t.Live, t.Healthy = e.Revision, true
 			start(e)
+			if first := !deployed[e.Revision]; first && early[e.Revision] != nil && early[e.Revision].Kind == Degraded {
+				d := *early[e.Revision]
+				d.At = e.At
+				end(d)
+				t.Healthy = false
+			}
+			deployed[e.Revision] = true
 		case Degraded:
+			if !deployed[e.Revision] {
+				ev := e
+				early[e.Revision] = &ev
+			}
 			if e.Revision != t.Live {
 				t.Ignored = append(t.Ignored, e)
 				continue
@@ -91,6 +106,10 @@ func BuildTimeline(events []Event, env, service string, now time.Time) Timeline 
 				t.Healthy = false
 			}
 		case Recovered:
+			if !deployed[e.Revision] {
+				ev := e
+				early[e.Revision] = &ev
+			}
 			if e.Revision != t.Live {
 				t.Ignored = append(t.Ignored, e)
 				continue

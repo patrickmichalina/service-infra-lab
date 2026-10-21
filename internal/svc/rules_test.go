@@ -24,7 +24,7 @@ ingress:
   - {namespace: monitoring, ports: [8080]}
 egress:
   - {cidr: "{vpcCidr}", ports: [9098]}
-  - {cidr: 0.0.0.0/0, ports: [443], reason: vendor feed}
+  - {cidr: 0.0.0.0/0, ports: [443], hosts: [feed.vendor-example.com, aws:s3], reason: vendor feed}
 secrets:
   - {key: vendor-api-key, ssm: /ingestion/odds-ingest/vendor-api-key}
 permissions:
@@ -159,7 +159,9 @@ func TestR2(t *testing.T) {
 	t.Run("a family wildcard and KMS use are allowed", func(t *testing.T) {
 		y := with("  - actions: [s3:PutObject]", "  - actions: [s3:Get*]") +
 			"  - actions: [kms:Decrypt, kms:GenerateDataKey*]\n    resources: [kms-key:ui-assets]\n"
-		if fs := errorsFor(t, p, spec(t, y), "R2"); len(fs) != 0 {
+		q := *p // the key is distribution's; it shares it with odds-ingest here
+		q.Resources = append([]Ownership{{Ref: "kms-key:ui-assets", Owner: "distribution", Share: []Share{{Service: "odds-ingest", Access: "write"}}}}, p.Resources...)
+		if fs := errorsFor(t, &q, spec(t, y), "R2"); len(fs) != 0 {
 			t.Fatal(fs)
 		}
 	})
@@ -215,10 +217,10 @@ func TestR4(t *testing.T) {
 		expectError(t, p, with("{namespace: monitoring, ports: [8080]}", "{ports: [8080]}"), "R4", "ingress[0]", "one rule per caller")
 	})
 	t.Run("internet egress on another port", func(t *testing.T) {
-		expectError(t, p, with("ports: [443], reason: vendor feed", "ports: [80], reason: vendor feed"), "R4", "egress[1]", "ports: [443]")
+		expectError(t, p, with("ports: [443], hosts", "ports: [80], hosts"), "R4", "egress[1]", "ports: [443]")
 	})
 	t.Run("internet egress without a reason", func(t *testing.T) {
-		expectError(t, p, with("ports: [443], reason: vendor feed", "ports: [443]"), "R4", "egress[1]", "reason")
+		expectError(t, p, with(", reason: vendor feed}", "}"), "R4", "egress[1]", "reason")
 	})
 	t.Run("literal VPC CIDR", func(t *testing.T) {
 		expectError(t, p, with(`cidr: "{vpcCidr}"`, "cidr: 10.20.4.0/24"), "R4", "egress[0].cidr", `cidr: "{vpcCidr}"`)
@@ -264,7 +266,7 @@ func TestR5(t *testing.T) {
 // chart and image come only from that environment's promoted pointers.
 func TestChartAndImageComeOnlyFromTheEnvironmentsPointers(t *testing.T) {
 	p := platform(t)
-	sw := strings.NewReplacer("odds-ingest", "settlement-writer", "team: ingestion", "team: state", "/ingestion/", "/state/").Replace(base)
+	sw := strings.NewReplacer("odds-ingest", "settlement-writer", "odds-snapshots", "settlement-reports", "team: ingestion", "team: state", "/ingestion/", "/state/").Replace(base)
 	for env, want := range map[string][]string{
 		"stg": {"targetRevision: 2.7.1", "tag: r7", "222222222222.dkr.ecr.us-east-1.amazonaws.com/trading/settlement-writer"},
 		"prd": {"targetRevision: 2.7.0", "tag: r6", "333333333333.dkr.ecr.us-east-1.amazonaws.com/trading/settlement-writer"},
@@ -305,7 +307,7 @@ func TestR7(t *testing.T) {
 
 func TestR8(t *testing.T) {
 	p := platform(t)
-	sw := strings.NewReplacer("odds-ingest", "settlement-writer", "team: ingestion", "team: state", "/ingestion/", "/state/").Replace(base)
+	sw := strings.NewReplacer("odds-ingest", "settlement-writer", "odds-snapshots", "settlement-reports", "team: ingestion", "team: state", "/ingestion/", "/state/").Replace(base)
 	grantsAllButWrite := sw + `  - actions: [kafka-cluster:Connect]
     resources: [msk-cluster:main]
   - actions: [kafka-cluster:DescribeTopic, kafka-cluster:ReadData]
@@ -345,7 +347,7 @@ func TestR8(t *testing.T) {
 		}
 	})
 	t.Run("a running service without usage data is flagged", func(t *testing.T) {
-		tu := strings.NewReplacer("odds-ingest", "trader-ui", "team: ingestion", "team: distribution", "/ingestion/", "/distribution/").Replace(base)
+		tu := strings.NewReplacer("odds-ingest", "trader-ui", "odds-snapshots", "ui-assets", "team: ingestion", "team: distribution", "/ingestion/", "/distribution/").Replace(base)
 		p := platform(t)
 		delete(p.Envs["prd"].Observed, "trader-ui")
 		r := Evaluate(spec(t, tu), p, "prd")
@@ -354,7 +356,7 @@ func TestR8(t *testing.T) {
 		}
 	})
 	t.Run("dropping an environment the service runs in is shown", func(t *testing.T) {
-		sw := strings.NewReplacer("odds-ingest", "settlement-writer", "team: ingestion", "team: state", "/ingestion/", "/state/").Replace(base)
+		sw := strings.NewReplacer("odds-ingest", "settlement-writer", "odds-snapshots", "settlement-reports", "team: ingestion", "team: state", "/ingestion/", "/state/").Replace(base)
 		r := Evaluate(spec(t, strings.Replace(sw, "environments: [stg, prd]", "environments: [stg]", 1)), p, "prd")
 		if len(r.Findings) != 1 || r.Findings[0].Rule != "R8" || !strings.Contains(r.Findings[0].Problem, "are deleted") {
 			t.Fatal(r.Findings)
@@ -383,19 +385,23 @@ func TestNetworkAdvice(t *testing.T) {
 		}
 		return out
 	}
-	if w := warns(with("{namespace: monitoring, ports: [8080]}", "{namespace: kube-system, ports: [3000], reason: internal ALB}")); len(w) != 1 || !strings.Contains(w[0].Fix, `cidr: "{vpcCidr}"`) {
+	if w := warns(with("{namespace: monitoring, ports: [8080]}", "{namespace: kube-system, ports: [3000], reason: internal ALB}")); len(w) != 1 || !strings.Contains(w[0].Fix, `cidr: "{albSubnets}"`) {
 		t.Errorf("kube-system ingress: %v", w)
 	}
-	if w := warns(with("  - {cidr: 0.0.0.0/0, ports: [443], reason: vendor feed}\n", "")); len(w) != 1 || !strings.Contains(w[0].Problem, "gateway endpoint") {
+	// A13: on the VPC CNI, pods have VPC addresses.
+	if w := warns(with("{namespace: monitoring, ports: [8080]}", `{cidr: "{vpcCidr}", ports: [3000], reason: internal ALB}`)); len(w) != 1 || !strings.Contains(w[0].Problem, "every pod in the cluster") {
+		t.Errorf("VPC-wide ingress: %v", w)
+	}
+	if w := warns(with("  - {cidr: 0.0.0.0/0, ports: [443], hosts: [feed.vendor-example.com, aws:s3], reason: vendor feed}\n", "")); len(w) != 1 || !strings.Contains(w[0].Problem, "gateway endpoint") {
 		t.Errorf("S3 without egress: %v", w)
 	}
 }
 
 func TestFleetFindsOneSidedRules(t *testing.T) {
 	p := platform(t)
-	server := spec(t, strings.NewReplacer("odds-ingest", "settlement-writer", "team: ingestion", "team: state", "/ingestion/", "/state/").Replace(base))
+	server := spec(t, strings.NewReplacer("odds-ingest", "settlement-writer", "odds-snapshots", "settlement-reports", "team: ingestion", "team: state", "/ingestion/", "/state/").Replace(base))
 	server.Ingress = append(server.Ingress, Peer{Namespace: "distribution", Ports: []int{9090}})
-	caller := spec(t, strings.NewReplacer("odds-ingest", "trader-ui", "team: ingestion", "team: distribution", "/ingestion/", "/distribution/").Replace(base))
+	caller := spec(t, strings.NewReplacer("odds-ingest", "trader-ui", "odds-snapshots", "ui-assets", "team: ingestion", "team: distribution", "/ingestion/", "/distribution/").Replace(base))
 	if got := CheckFleet([]*Spec{server, caller}, p); len(got["settlement-writer"]) != 1 {
 		t.Fatalf("want one-sided ingress reported, got %v", got)
 	}

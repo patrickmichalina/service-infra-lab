@@ -105,12 +105,16 @@ func Render(s *Spec, p *Platform, env string, refused map[string]bool) ([]Object
 			}})
 	}
 
+	npMeta := meta(s.Service, ns)
+	if hosts := egressHosts(s, e, refused); hosts != "" {
+		npMeta["annotations"].(m)["platform.example.org/egress-hosts"] = hosts
+	}
 	objs = append(objs, Object{"networkpolicy.yaml", m{
-		"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": meta(s.Service, ns),
+		"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": npMeta,
 		"spec": m{
 			"podSelector": m{"matchLabels": m{nameLabel: s.Service}},
 			"policyTypes": []string{"Ingress", "Egress"},
-			"ingress":     ingressRules(s, cfg, refused),
+			"ingress":     ingressRules(s, e, refused),
 			"egress":      egressRules(s, cfg, refused, len(statements) > 0),
 		},
 	}})
@@ -228,17 +232,23 @@ func namespacePeer(ns string) m {
 	return m{"namespaceSelector": m{"matchLabels": m{"kubernetes.io/metadata.name": ns}}}
 }
 
-func ingressRules(s *Spec, cfg EnvConfig, refused map[string]bool) []m {
+func ingressRules(s *Spec, e *Env, refused map[string]bool) []m {
 	out := []m{}
 	for i, r := range s.Ingress {
 		if refused[fmt.Sprintf("ingress[%d]", i)] {
 			continue
 		}
-		from := namespacePeer(r.Namespace)
-		if r.CIDR == vpcToken {
-			from = m{"ipBlock": m{"cidr": cfg.VPCCIDR}}
+		from := []m{namespacePeer(r.Namespace)}
+		switch r.CIDR {
+		case vpcToken:
+			from = []m{{"ipBlock": m{"cidr": e.Config.VPCCIDR}}}
+		case albToken:
+			from = nil
+			for _, subnet := range e.Catalog.ALBSubnets {
+				from = append(from, m{"ipBlock": m{"cidr": subnet}})
+			}
 		}
-		out = append(out, m{"from": []m{from}, "ports": ports(r.Ports)})
+		out = append(out, m{"from": from, "ports": ports(r.Ports)})
 	}
 	return out
 }
@@ -270,6 +280,28 @@ func egressRules(s *Spec, cfg EnvConfig, refused map[string]bool, hasRole bool) 
 		out = append(out, m{"to": []m{to}, "ports": ports(r.Ports)})
 	}
 	return out
+}
+
+// egressHosts lists the hosts the internet rules are for, with AWS endpoints
+// resolved for this environment's region. A NetworkPolicy cannot enforce them;
+// the annotation records them where review, audit and an FQDN-aware network
+// layer can read them.
+func egressHosts(s *Spec, e *Env, refused map[string]bool) string {
+	var hosts []string
+	for i, r := range s.Egress {
+		if refused[fmt.Sprintf("egress[%d]", i)] || r.CIDR != "0.0.0.0/0" {
+			continue
+		}
+		for _, h := range r.Hosts {
+			if h == "aws:s3" {
+				hosts = append(hosts, "s3."+e.Catalog.Region+".amazonaws.com", "*.s3."+e.Catalog.Region+".amazonaws.com")
+				continue
+			}
+			hosts = append(hosts, h)
+		}
+	}
+	slices.Sort(hosts)
+	return strings.Join(slices.Compact(hosts), ",")
 }
 
 // jsonString indents policy documents so a permission change is a readable

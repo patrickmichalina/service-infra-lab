@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   annotations:
-    platform.example.org/spec-digest: sha256:6314a8b8a10dc6fec6da3f59d79b5ff53fe9c2a4065742486c3c392de3991708
+    platform.example.org/spec-digest: sha256:2456c6d5883d7ccdae0b712ae9709f04d016fabe8fb5b9df415a3b7f489ac0fd
   labels:
     app.kubernetes.io/managed-by: svcrender
     app.kubernetes.io/name: trader-ui

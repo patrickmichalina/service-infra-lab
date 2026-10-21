@@ -16,6 +16,11 @@ const (
 	DefectNonUTC     DefectKind = "non-utc"     // valid, but not in UTC; normalized
 	DefectDuplicate  DefectKind = "duplicate"   // same event delivered again; ignored
 	DefectIDConflict DefectKind = "id-conflict" // same id, different content; both kept
+
+	DefectUnknownField DefectKind = "unknown-field"        // valid, with fields outside the contract; reported
+	DefectUnknownEnv   DefectKind = "unknown-env"          // names an environment the gate does not know
+	DefectSameInstant  DefectKind = "same-instant"         // two revisions deployed at one instant: order unknown
+	DefectEarlyHealth  DefectKind = "health-before-deploy" // about a revision not yet deployed there
 )
 
 // Defect is something wrong with the input. Every defect is reported; only
@@ -43,6 +48,14 @@ func (d Defect) problem() string {
 	return d.Detail
 }
 
+// remedy says what makes a tainting defect stop blocking.
+func (d Defect) remedy() string {
+	if d.Kind == DefectSameInstant {
+		return "The next deploy to that environment decides; until then, which revision soaked is unknown"
+	}
+	return "Have the producer redeliver it; it then decides"
+}
+
 // Taint is what we still know about an event we could not use. Zero fields
 // mean "unknown", and unknown matches everything: we fail closed.
 type Taint struct {
@@ -50,7 +63,8 @@ type Taint struct {
 	At              time.Time
 	Env             string
 	Service         string
-	ServiceIsPrefix bool // the line was cut off inside the service name
+	ServiceIsPrefix bool      // the line was cut off inside the service name
+	Until           time.Time // a later fact that makes the lost one irrelevant; zero: none
 }
 
 // Concerns reports whether the lost event could have changed a decision about
@@ -60,6 +74,9 @@ func (t Taint) Concerns(env, service string, now time.Time) bool {
 		return false
 	}
 	if !t.At.IsZero() && t.At.After(now) {
+		return false
+	}
+	if !t.Until.IsZero() && !now.Before(t.Until) {
 		return false
 	}
 	switch {

@@ -1,54 +1,377 @@
-# Objects that must be refused at admission, whoever applies them.
+# Objects that must be refused at admission, whoever applies them. Each is an attack
+# from the adversarial pass (docs/notes.md) or a shape R1, R2 or R4 forbids. Written for
+# the stg cluster (params/stg.yaml); test.sh checks every one is refused.
+# empty podSelector with rules: widens the whole namespace
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata: {name: np-empty-selector, namespace: normalization}
 spec:
   podSelector: {}
   policyTypes: [Ingress]
-  ingress: [{}]
+  ingress: [{from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}], ports: [{port: 8080}]}]
+
 ---
+# ingress from every namespace
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata: {name: np-any-namespace, namespace: normalization}
 spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: rfq-router}}
-  ingress:
-    - from: [{namespaceSelector: {}}]
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  ingress: [{from: [{namespaceSelector: {}}], ports: [{port: 8080}]}]
+
 ---
+# internet egress on every port
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata: {name: np-internet-all-ports, namespace: normalization}
 spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: rfq-router}}
-  egress:
-    - to: [{ipBlock: {cidr: 0.0.0.0/0}}]
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  egress: [{to: [{ipBlock: {cidr: 0.0.0.0/0, except: [10.20.0.0/16]}}]}]
+
 ---
+# a literal address outside the VPC
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata: {name: np-literal-external, namespace: distribution}
 spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: trader-ui}}
-  egress:
-    - to: [{ipBlock: {cidr: 203.0.113.40/32}}]
-      ports: [{port: 443, protocol: TCP}]
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  egress: [{to: [{ipBlock: {cidr: 203.0.113.40/32}}], ports: [{port: 443, protocol: TCP}]}]
+
 ---
+# b1: ingress from the whole internet
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: b1-ingress-from-internet, namespace: ingestion}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  ingress: [{from: [{ipBlock: {cidr: 0.0.0.0/0}}], ports: [{port: 8080}]}]
+
+---
+# b2: egress to every namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: b2-egress-all-namespaces, namespace: ingestion}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  egress: [{to: [{namespaceSelector: {}}], ports: [{port: 8080}]}]
+
+---
+# b3: stg egress to the prd VPC
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: b3-stg-to-prd-vpc, namespace: ingestion}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  egress: [{to: [{ipBlock: {cidr: 10.30.0.0/16}}], ports: [{port: 9098}]}]
+
+---
+# b4: egress to all of 10.0.0.0/8
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: b4-ten-slash-8, namespace: ingestion}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  egress: [{to: [{ipBlock: {cidr: 10.0.0.0/8}}], ports: [{port: 9098}]}]
+
+---
+# b5: a selector widened by matchExpressions
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: b5-selector-exists, namespace: ingestion}
+spec:
+  podSelector: {matchExpressions: [{key: app.kubernetes.io/name, operator: Exists}], matchLabels: {app.kubernetes.io/name: x}}
+  egress: [{to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: state}}}], ports: [{port: 9090}]}]
+
+---
+# b9: allow-all in a namespace nobody labelled
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: b9-unlabelled-namespace, namespace: sandbox}
+spec:
+  podSelector: {}
+  ingress: [{}]
+  egress: [{}]
+
+---
+# a rule without ports opens every port
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: rule-without-ports, namespace: ingestion}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  ingress: [{from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]}]
+
+---
+# an egress rule without to reaches everywhere
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: rule-without-peers, namespace: ingestion}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  egress: [{ports: [{port: 443}]}]
+
+---
+# a port range
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: port-range, namespace: ingestion}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  egress: [{to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: state}}}], ports: [{port: 1, endPort: 65535}]}]
+
+---
+# a namespaceSelector naming every namespace but one
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: selector-with-expressions, namespace: ingestion}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  egress: [{to: [{namespaceSelector: {matchExpressions: [{key: kubernetes.io/metadata.name, operator: NotIn, values: [kube-system]}]}}], ports: [{port: 8080}]}]
+
+---
+# internet egress without the hosts annotation
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: internet-without-hosts, namespace: ingestion}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  egress: [{to: [{ipBlock: {cidr: 0.0.0.0/0, except: [10.20.0.0/16]}}], ports: [{port: 443, protocol: TCP}]}]
+
+---
+# internet egress that does not exclude this VPC
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: internet-not-excluding-vpc, namespace: ingestion, annotations: {platform.example.org/egress-hosts: x.example.com}}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  egress: [{to: [{ipBlock: {cidr: 0.0.0.0/0, except: [10.30.0.0/16]}}], ports: [{port: 443, protocol: TCP}]}]
+
+---
+# no boundary
 apiVersion: iam.services.k8s.aws/v1alpha1
 kind: Role
 metadata: {name: role-no-boundary, namespace: ack-services}
 spec:
-  name: role-no-boundary
-  assumeRolePolicyDocument: '{"Statement":[{"Principal":{"Service":"pods.eks.amazonaws.com"}}]}'
+  name: svc-ingestion-no-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+
 ---
+# s3:* on *
 apiVersion: iam.services.k8s.aws/v1alpha1
 kind: Role
 metadata: {name: role-star, namespace: ack-services}
 spec:
-  name: role-star
+  name: svc-ingestion-role-star
   permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
-  assumeRolePolicyDocument: '{"Statement":[{"Principal":{"Service":"pods.eks.amazonaws.com"}}]}'
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
   inlinePolicies:
-    service: '{"Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":["*"]}]}'
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["s3:*"], "Resource": ["*"]}]}'
+
 ---
+# b6: s3:* on * written as JSON escapes
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: b6-unicode-star, namespace: ack-services}
+spec:
+  name: svc-ingestion-b6-unicode-star
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["s3:\u002a"], "Resource": ["\u002a"]}]}'
+
+---
+# iam:PassRole with an escaped i
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: unicode-iam, namespace: ack-services}
+spec:
+  name: svc-ingestion-unicode-iam
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["\u0069am:PassRole"], "Resource": ["arn:aws:s3:::trading-platform-stg-odds-snapshots/*"]}]}'
+
+---
+# b7: Allow with NotAction grants everything else
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: b7-notaction, namespace: ack-services}
+spec:
+  name: svc-ingestion-b7-notaction
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "NotAction": ["iam:*"], "Resource": ["arn:aws:s3:::trading-platform-stg-odds-snapshots/*"]}]}'
+
+---
+# b8: a boundary from another account
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: b8-foreign-boundary, namespace: ack-services}
+spec:
+  name: svc-ingestion-b8-foreign-boundary
+  permissionsBoundary: arn:aws:iam::999999999999:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["s3:GetObject"], "Resource": ["arn:aws:s3:::trading-platform-stg-odds-snapshots/*"]}]}'
+
+---
+# IAM in upper case
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: iam-upper, namespace: ack-services}
+spec:
+  name: svc-ingestion-iam-upper
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["IAM:PassRole"], "Resource": ["arn:aws:s3:::trading-platform-stg-odds-snapshots/*"]}]}'
+
+---
+# * with spaces
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: star-spaces, namespace: ack-services}
+spec:
+  name: svc-ingestion-star-spaces
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": [" * "], "Resource": [" * "]}]}'
+
+---
+# a leading action wildcard
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: prefix-wildcard, namespace: ack-services}
+spec:
+  name: svc-ingestion-prefix-wildcard
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["s3:*Object"], "Resource": ["arn:aws:s3:::trading-platform-stg-odds-snapshots/*"]}]}'
+
+---
+# a wildcard in the service prefix
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: service-wildcard, namespace: ack-services}
+spec:
+  name: svc-ingestion-service-wildcard
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["s*:GetObject"], "Resource": ["arn:aws:s3:::trading-platform-stg-odds-snapshots/*"]}]}'
+
+---
+# KMS key management
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: kms-manage, namespace: ack-services}
+spec:
+  name: svc-ingestion-kms-manage
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["kms:CreateGrant"], "Resource": ["arn:aws:kms:us-east-1:222222222222:key/x"]}]}'
+
+---
+# s3:Put* covers PutBucketPolicy
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: s3-put-star, namespace: ack-services}
+spec:
+  name: svc-ingestion-s3-put-star
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["s3:Put*"], "Resource": ["arn:aws:s3:::trading-platform-stg-odds-snapshots/*"]}]}'
+
+---
+# a bucket policy write
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: s3-bucket-policy, namespace: ack-services}
+spec:
+  name: svc-ingestion-s3-bucket-policy
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["s3:PutBucketPolicy"], "Resource": ["arn:aws:s3:::trading-platform-stg-odds-snapshots"]}]}'
+
+---
+# topic deletion
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: kafka-delete-topic, namespace: ack-services}
+spec:
+  name: svc-ingestion-kafka-delete-topic
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["kafka-cluster:DeleteTopic"], "Resource": ["arn:aws:kafka:us-east-1:222222222222:topic/c/u/odds.raw"]}]}'
+
+---
+# arn:aws:s3:::* is every bucket
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: every-bucket, namespace: ack-services}
+spec:
+  name: svc-ingestion-every-bucket
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["s3:GetObject"], "Resource": ["arn:aws:s3:::*"]}]}'
+
+---
+# an attached managed policy
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: managed-policy, namespace: ack-services}
+spec:
+  name: svc-ingestion-managed-policy
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "pods.eks.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"], "Condition": {"StringEquals": {"aws:RequestTag/kubernetes-namespace": "ingestion", "aws:RequestTag/kubernetes-service-account": "odds-ingest"}}}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["s3:GetObject"], "Resource": ["arn:aws:s3:::trading-platform-stg-odds-snapshots/*"]}]}'
+  policies: [arn:aws:iam::aws:policy/AdministratorAccess]
+
+---
+# a trust policy that lets any AWS principal assume it
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: trust-any-aws, namespace: ack-services}
+spec:
+  name: svc-ingestion-trust-any-aws
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Statement": [{"Effect": "Allow", "Principal": {"AWS": "*"}, "Action": "sts:AssumeRole"}]}'
+  inlinePolicies:
+    service: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["s3:GetObject"], "Resource": ["arn:aws:s3:::trading-platform-stg-odds-snapshots/*"]}]}'
+
+---
+# binding a service account to another service's role
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata: {name: pia-other-role, namespace: ack-services}
+spec:
+  clusterName: trading-platform-stg
+  namespace: ingestion
+  serviceAccount: odds-ingest
+  roleARN: arn:aws:iam::222222222222:role/svc-state-settlement-writer
+
+---
+# a role for a platform namespace
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata: {name: pia-kube-system, namespace: ack-services}
+spec:
+  clusterName: trading-platform-stg
+  namespace: kube-system
+  serviceAccount: odds-ingest
+  roleARN: arn:aws:iam::222222222222:role/svc-kube-system-odds-ingest
+
+---
+# the default project
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -58,7 +381,10 @@ metadata:
 spec:
   project: default
   destination: {server: https://kubernetes.default.svc, namespace: normalization}
+  source: {repoURL: https://charts.example.org, chart: x, targetRevision: 1.0.0}
+
 ---
+# another team's namespace
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -68,3 +394,109 @@ metadata:
 spec:
   project: normalization
   destination: {server: https://kubernetes.default.svc, namespace: state}
+  source: {repoURL: https://charts.example.org, chart: x, targetRevision: 1.0.0}
+
+---
+# b10: no team label, default project, into kube-system
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: b10-unlabelled-app
+  namespace: argocd
+spec:
+  project: default
+  destination: {server: https://kubernetes.default.svc, namespace: kube-system}
+  source: {repoURL: https://charts.example.org, chart: x, targetRevision: 1.0.0}
+
+---
+# a project nobody registered
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-unknown-project
+  namespace: argocd
+spec:
+  project: sandbox
+  destination: {server: https://kubernetes.default.svc, namespace: sandbox}
+  source: {repoURL: https://charts.example.org, chart: x, targetRevision: 1.0.0}
+
+---
+# services-infra outside team namespaces
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infra-into-kube-system
+  namespace: argocd
+spec:
+  project: services-infra
+  destination: {server: https://kubernetes.default.svc, namespace: kube-system}
+  source: {repoURL: https://charts.example.org, chart: x, targetRevision: 1.0.0}
+
+---
+# a team project reaching every namespace
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: ingestion, namespace: argocd}
+spec:
+  destinations: [{server: https://kubernetes.default.svc, namespace: '*'}]
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist: [{group: apps, kind: Deployment}]
+
+---
+# a team project allowed cluster-scoped kinds
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: state, namespace: argocd}
+spec:
+  destinations: [{server: https://kubernetes.default.svc, namespace: state}]
+  clusterResourceWhitelist: [{group: '*', kind: '*'}]
+  namespaceResourceWhitelist: [{group: apps, kind: Deployment}]
+
+---
+# a blacklist instead of an allow-list
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: normalization, namespace: argocd}
+spec:
+  destinations: [{server: https://kubernetes.default.svc, namespace: normalization}]
+  namespaceResourceBlacklist: [{group: networking.k8s.io, kind: NetworkPolicy}]
+
+---
+# a team project allowed NetworkPolicy
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: distribution, namespace: argocd}
+spec:
+  destinations: [{server: https://kubernetes.default.svc, namespace: distribution}]
+  namespaceResourceWhitelist: [{group: networking.k8s.io, kind: NetworkPolicy}]
+
+---
+# role chaining: a second role the boundary does not cover
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata: {name: pia-target-role, namespace: ack-services}
+spec:
+  clusterName: trading-platform-stg
+  namespace: ingestion
+  serviceAccount: odds-ingest
+  roleARN: arn:aws:iam::222222222222:role/svc-ingestion-odds-ingest
+  targetRoleARN: arn:aws:iam::999999999999:role/admin
+---
+# session tags off: trust conditions and ABAC stop holding
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata: {name: pia-no-session-tags, namespace: ack-services}
+spec:
+  clusterName: trading-platform-stg
+  namespace: ingestion
+  serviceAccount: odds-ingest
+  roleARN: arn:aws:iam::222222222222:role/svc-ingestion-odds-ingest
+  disableSessionTags: true
+---
+# ingress from a range that only looks like the ALB subnets
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: ingress-other-subnet, namespace: distribution}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: trader-ui}}
+  ingress: [{from: [{ipBlock: {cidr: 10.20.240.0/20}}], ports: [{port: 3000}]}]

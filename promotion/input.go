@@ -36,7 +36,7 @@ func LoadPolicy(path string) (Policy, error) {
 	case cfg.Promotion.SoakMinutes <= 0:
 		return Policy{}, fmt.Errorf("%s: promotion.soakMinutes must be positive, got %d", path, cfg.Promotion.SoakMinutes)
 	}
-	return Policy{From: cfg.Promotion.From, Soak: time.Duration(cfg.Promotion.SoakMinutes) * time.Minute}, nil
+	return Policy{From: cfg.Promotion.From, To: cfg.Env, Soak: time.Duration(cfg.Promotion.SoakMinutes) * time.Minute}, nil
 }
 
 // ParseQueries reads "now service revision" lines; '#' starts a comment.

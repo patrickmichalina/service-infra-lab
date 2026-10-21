@@ -44,11 +44,15 @@ type Spec struct {
 	Digest string    `yaml:"-"` // sha256 of the file, stamped on what it renders
 }
 
-// Peer is one side of a network rule: a namespace, or a CIDR token.
+// Peer is one side of a network rule: a namespace, or a CIDR token. Hosts
+// names the endpoints an internet rule is for; a NetworkPolicy cannot match
+// them, but they make the rule's purpose checkable and are what an FQDN-aware
+// network layer enforces.
 type Peer struct {
 	Namespace string               `yaml:"namespace"`
 	CIDR      string               `yaml:"cidr"`
 	Ports     []int                `yaml:"ports"`
+	Hosts     []string             `yaml:"hosts"`
 	Reason    string               `yaml:"reason"`
 	Unknown   map[string]yaml.Node `yaml:",inline"`
 }
@@ -72,9 +76,10 @@ type Secret struct {
 // Removal is the engineer confirming that a permission the running pod uses
 // may go away (R8).
 type Removal struct {
-	Action   string `yaml:"action"`
-	Resource string `yaml:"resource"`
-	Reason   string `yaml:"reason"`
+	Action   string               `yaml:"action"`
+	Resource string               `yaml:"resource"`
+	Reason   string               `yaml:"reason"`
+	Unknown  map[string]yaml.Node `yaml:",inline"`
 }
 
 // LoadSpec parses the spec file of repo. It fails only when the file is not

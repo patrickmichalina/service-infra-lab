@@ -1,43 +1,79 @@
-# Backstop for R4 at admission. The renderer already produces only policies like
-# this; this refuses anything else that reaches a team namespace (a chart that
-# slipped past the Argo CD project, a hand apply). It holds without env facts:
-# the renderer owns the exact VPC range, admission owns the shape.
+# R4 at admission, for every NetworkPolicy in every namespace that is not explicitly a
+# platform namespace. It is at least as strict as the renderer: the renderer can be
+# skipped (a hand edit of platform-gitops, a compromised bot), this cannot.
+#
+# Allowed shapes, and nothing else:
+#   - one service's pods (podSelector is exactly app.kubernetes.io/name), or a pure
+#     deny-all (empty podSelector with no rules at all);
+#   - every rule names its peers and its ports (a rule without them means "all");
+#   - a peer is one namespace by name, the VPC (exactly this cluster's vpcCidr), the load
+#     balancer subnets (ingress), the Pod Identity agent, or the internet on 443 only, excluding the VPC, with the hosts the
+#     rule is for recorded in the platform.example.org/egress-hosts annotation.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
   name: service-networkpolicy
 spec:
   failurePolicy: Fail
+  paramKind: {apiVersion: v1, kind: ConfigMap}
   matchConstraints:
     namespaceSelector:
-      matchLabels:
-        platform.example.org/team-namespace: "true"
+      matchExpressions:
+        - {key: platform.example.org/platform-namespace, operator: DoesNotExist}
     resourceRules:
       - apiGroups: ["networking.k8s.io"]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["networkpolicies"]
   variables:
-    - name: peersIn
-      expression: "object.spec.?ingress.orValue([]).map(r, r.?from.orValue([])).flatten()"
+    - name: ingress
+      expression: "object.spec.?ingress.orValue([])"
     - name: egress
       expression: "object.spec.?egress.orValue([])"
+    - name: selector
+      expression: "object.spec.podSelector"
+    - name: vpc
+      expression: "params.data.vpcCidr"
   validations:
-    - expression: "object.spec.podSelector.?matchLabels.orValue({}).exists(k, k == 'app.kubernetes.io/name')"
-      message: "a NetworkPolicy in a team namespace must select one service's pods by app.kubernetes.io/name; an empty podSelector widens the whole namespace (R4)"
-    - expression: "variables.peersIn.all(p, !has(p.namespaceSelector) || p.namespaceSelector.?matchLabels.orValue({}).exists(k, k == 'kubernetes.io/metadata.name'))"
-      message: "ingress from another namespace must name it with kubernetes.io/metadata.name (R4)"
     - expression: >-
-        variables.egress.all(r, r.?to.orValue([]).all(p, !has(p.ipBlock) || p.ipBlock.cidr != '0.0.0.0/0' ||
-        (size(p.ipBlock.?except.orValue([])) > 0 && r.?ports.orValue([]).size() == 1 && r.ports[0].port == 443)))
-      message: "egress to 0.0.0.0/0 is allowed only on port 443 and must exclude the VPC (R4)"
+        (!has(variables.selector.matchExpressions) &&
+         variables.selector.?matchLabels.orValue({}).size() == 1 &&
+         'app.kubernetes.io/name' in variables.selector.matchLabels) ||
+        (variables.selector.?matchLabels.orValue({}).size() == 0 && !has(variables.selector.matchExpressions) &&
+         variables.ingress.size() == 0 && variables.egress.size() == 0)
+      message: "a NetworkPolicy selects exactly one service's pods by app.kubernetes.io/name; an empty podSelector is allowed only for a deny-all with no rules (R4)"
     - expression: >-
-        variables.egress.all(r, r.?to.orValue([]).all(p, !has(p.ipBlock) ||
-        p.ipBlock.cidr == '0.0.0.0/0' || p.ipBlock.cidr.startsWith('10.') || p.ipBlock.cidr == '169.254.170.23/32'))
-      message: "egress to a literal address outside the VPC is not allowed; use 0.0.0.0/0 on 443 (R4)"
+        variables.ingress.all(r, r.?from.orValue([]).size() > 0 && r.?ports.orValue([]).size() > 0) &&
+        variables.egress.all(r, r.?to.orValue([]).size() > 0 && r.?ports.orValue([]).size() > 0)
+      message: "every rule must list its peers and its ports; a rule without from/to or ports allows everything (R4)"
+    - expression: >-
+        variables.ingress.all(r, r.ports.all(p, has(p.port) && !has(p.endPort))) &&
+        variables.egress.all(r, r.ports.all(p, has(p.port) && !has(p.endPort)))
+      message: "every port must be one port; a port entry without a port, or a range, opens more than the spec asked for (R4)"
+    - expression: >-
+        variables.ingress.all(r, r.from.all(p,
+          (has(p.namespaceSelector) && !has(p.ipBlock) && !has(p.namespaceSelector.matchExpressions) &&
+           p.namespaceSelector.?matchLabels.orValue({}).size() == 1 &&
+           p.namespaceSelector.matchLabels.exists(k, k == 'kubernetes.io/metadata.name')) ||
+          (has(p.ipBlock) && !has(p.namespaceSelector) && !has(p.podSelector) && !has(p.ipBlock.except) &&
+           (p.ipBlock.cidr == variables.vpc || p.ipBlock.cidr in params.data.albSubnets.split(',')))))
+      message: "ingress must name each namespace it admits (kubernetes.io/metadata.name), or come from exactly this cluster's VPC range or load balancer subnets (R4)"
+    - expression: >-
+        variables.egress.all(r, r.to.all(p,
+          (has(p.namespaceSelector) && !has(p.ipBlock) && !has(p.namespaceSelector.matchExpressions) &&
+           p.namespaceSelector.?matchLabels.orValue({}).size() == 1 &&
+           p.namespaceSelector.matchLabels.exists(k, k == 'kubernetes.io/metadata.name')) ||
+          (has(p.ipBlock) && !has(p.namespaceSelector) && !has(p.podSelector) && !has(p.ipBlock.except) &&
+           (p.ipBlock.cidr == variables.vpc || p.ipBlock.cidr == '169.254.170.23/32')) ||
+          (has(p.ipBlock) && !has(p.namespaceSelector) && !has(p.podSelector) && p.ipBlock.cidr == '0.0.0.0/0' &&
+           variables.vpc in p.ipBlock.?except.orValue([]) &&
+           r.ports.size() == 1 && r.ports[0].port == 443 && r.ports[0].?protocol.orValue('TCP') == 'TCP')))
+      message: "egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, or the internet on 443 only and excluding the VPC; nothing else, and no other literal address (R4)"
+    - expression: >-
+        !variables.egress.exists(r, r.to.exists(p, has(p.ipBlock) && p.ipBlock.cidr == '0.0.0.0/0')) ||
+        object.metadata.?annotations.orValue({})[?'platform.example.org/egress-hosts'].orValue('') != ''
+      message: "internet egress must record the hosts it is for in the platform.example.org/egress-hosts annotation (R4)"
 ---
-# Without a binding a ValidatingAdmissionPolicy is never evaluated. matchResources repeats
-# the policy's own constraints: redundant for the API server, needed by the offline kyverno CLI.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
@@ -45,10 +81,13 @@ metadata:
 spec:
   policyName: service-networkpolicy
   validationActions: [Deny]
+  paramRef: {name: platform-admission, namespace: kube-system, parameterNotFoundAction: Deny}
+  # matchResources repeats the policy's constraints: redundant for the API server,
+  # needed by the offline kyverno CLI.
   matchResources:
     namespaceSelector:
-      matchLabels:
-        platform.example.org/team-namespace: "true"
+      matchExpressions:
+        - {key: platform.example.org/platform-namespace, operator: DoesNotExist}
     resourceRules:
       - apiGroups: ["networking.k8s.io"]
         apiVersions: ["v1"]

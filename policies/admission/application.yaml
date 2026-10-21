@@ -1,32 +1,41 @@
-# Backstop for R1 at admission: an Application the renderer produces for a team
-# deploys only under that team's project (or the platform's infra project) and
-# only into that team's namespace. Nothing labelled for a team reaches default.
+# R1 at admission, for every Argo CD Application and every team AppProject. Argo CD's
+# own project checks are the first line; these hold even if an Application or project
+# is written by hand or by a compromised pipeline.
+#
+# Every Application uses a known project, never default. A team project deploys only
+# into the team's namespace; services-infra only into team namespaces and ack-services.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
   name: service-application
 spec:
   failurePolicy: Fail
+  paramKind: {apiVersion: v1, kind: ConfigMap}
   matchConstraints:
     resourceRules:
       - apiGroups: ["argoproj.io"]
-        apiVersions: ["v1alpha1"]
+        apiVersions: ["*"]
         operations: ["CREATE", "UPDATE"]
         resources: ["applications"]
-  matchConditions:
-    - name: rendered-for-a-team
-      expression: "has(object.metadata.labels) && 'platform.example.org/team' in object.metadata.labels"
   variables:
-    - name: team
-      expression: "object.metadata.labels['platform.example.org/team']"
+    - name: teams
+      expression: "params.data.teams.split(',')"
+    - name: project
+      expression: "object.spec.?project.orValue('')"
+    - name: namespace
+      expression: "object.spec.?destination.?namespace.orValue('')"
   validations:
-    - expression: "object.spec.project == variables.team || object.spec.project == 'services-infra'"
-      message: "a team's Application must use the team's Argo CD project (R1)"
-    - expression: "object.spec.destination.namespace == variables.team"
+    - expression: "variables.project != 'default' && variables.project != ''"
+      message: "no Application uses the default project (R1)"
+    - expression: >-
+        variables.project in variables.teams || variables.project == 'services-infra' ||
+        variables.project in params.data.platformProjects.split(',')
+      message: "an Application uses its team's project, services-infra, or a platform project (R1)"
+    - expression: "!(variables.project in variables.teams) || variables.namespace == variables.project"
       message: "a team's Application deploys only into the team's namespace (R1)"
+    - expression: "variables.project != 'services-infra' || variables.namespace in variables.teams || variables.namespace == 'ack-services'"
+      message: "services-infra deploys only into team namespaces and ack-services (R1)"
 ---
-# Without a binding a ValidatingAdmissionPolicy is never evaluated. matchResources repeats
-# the policy's own constraints: redundant for the API server, needed by the offline kyverno CLI.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
@@ -34,9 +43,65 @@ metadata:
 spec:
   policyName: service-application
   validationActions: [Deny]
+  paramRef: {name: platform-admission, namespace: kube-system, parameterNotFoundAction: Deny}
   matchResources:
     resourceRules:
       - apiGroups: ["argoproj.io"]
-        apiVersions: ["v1alpha1"]
+        apiVersions: ["*"]
         operations: ["CREATE", "UPDATE"]
         resources: ["applications"]
+---
+# A team project is what R1 rests on, so its shape is held too: its own namespace only,
+# no cluster-scoped kinds, and an allow-list without wildcards and without any kind the
+# platform renders.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: team-appproject
+spec:
+  failurePolicy: Fail
+  paramKind: {apiVersion: v1, kind: ConfigMap}
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["argoproj.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["appprojects"]
+  matchConditions:
+    - name: team-project
+      expression: "object.metadata.name in params.data.teams.split(',')"
+  variables:
+    - name: allowed
+      expression: "object.spec.?namespaceResourceWhitelist.orValue([])"
+  validations:
+    - expression: >-
+        object.spec.?destinations.orValue([]).size() > 0 &&
+        object.spec.destinations.all(d, d.?namespace.orValue('') == object.metadata.name &&
+          d.?server.orValue('') == 'https://kubernetes.default.svc' && !has(d.name))
+      message: "a team project deploys only into the team's own namespace on this cluster (R1)"
+    - expression: "object.spec.?clusterResourceWhitelist.orValue([]).size() == 0"
+      message: "a team project may not create cluster-scoped resources (R1)"
+    - expression: "variables.allowed.size() > 0 && variables.allowed.all(k, !k.group.contains('*') && !k.kind.contains('*'))"
+      message: "a team project lists the kinds it allows, without wildcards; no list means every kind (R1)"
+    - expression: >-
+        !variables.allowed.exists(k,
+          (k.group == '' && k.kind == 'ServiceAccount') ||
+          (k.group == 'networking.k8s.io' && k.kind == 'NetworkPolicy') ||
+          k.group == 'external-secrets.io' || k.group.endsWith('.services.k8s.aws') || k.group == 'cilium.io' ||
+          k.group == 'argoproj.io')
+      message: "a team project may not deploy kinds the platform renders or controls: ServiceAccount, NetworkPolicy, external-secrets, ACK, Cilium, Argo CD (R1, R2, R4)"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: team-appproject
+spec:
+  policyName: team-appproject
+  validationActions: [Deny]
+  paramRef: {name: platform-admission, namespace: kube-system, parameterNotFoundAction: Deny}
+  matchResources:
+    resourceRules:
+      - apiGroups: ["argoproj.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["appprojects"]

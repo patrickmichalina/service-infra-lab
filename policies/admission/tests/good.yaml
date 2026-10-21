@@ -1,0 +1,23 @@
+# Objects admission must accept: the platform baseline, a platform namespace's own
+# policy, and an Application in a platform project. (Rendered objects are checked too.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: deny-all-shape, namespace: sandbox}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-all-in-platform-namespace, namespace: kube-system}
+spec:
+  podSelector: {}
+  ingress: [{}]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: {name: platform-addons, namespace: argocd}
+spec:
+  project: platform
+  destination: {server: https://kubernetes.default.svc, namespace: kube-system}
+  source: {repoURL: https://git.example.org/platform-gitops.git, path: addons, targetRevision: main}
