@@ -1,0 +1,20 @@
+env: stg
+awsAccountId: "222222222222"
+clusterName: trading-platform-stg
+vpcCidr: 10.20.0.0/16
+ssmPrefix: /stg
+imageRegistry: 222222222222.dkr.ecr.us-east-1.amazonaws.com
+chartRegistry: oci://111111111111.dkr.ecr.us-east-1.amazonaws.com/charts
+permissionsBoundaryArn: arn:aws:iam::222222222222:policy/service-boundary
+argocd:
+  autoSync: true
+  allowedProjects:
+    - ingestion
+    - state
+    - normalization
+    - distribution
+teams:
+  ingestion: {namespace: ingestion, project: ingestion}
+  state: {namespace: state, project: state}
+  normalization: {namespace: normalization, project: normalization}
+  distribution: {namespace: distribution, project: distribution}

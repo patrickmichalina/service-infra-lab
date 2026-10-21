@@ -1,0 +1,23 @@
+# soak rule: live and healthy in stg without interruption for 120m, ending at now
+
+NOW                   SERVICE            REVISION  VERDICT     REASON
+2026-10-08T12:00:00Z  odds-ingest        r14       PROMOTABLE  live and healthy in stg since 2026-10-08T08:00:00Z (240m, soak needs 120m)
+2026-10-08T12:00:00Z  odds-ingest        r13       BLOCKED     no longer live in stg: replaced by r14 at 2026-10-08T08:00:00Z. Redeploy r13 to stg and let it soak 120m again, or promote the live revision r14 instead (PROMOTABLE)
+2026-10-08T13:00:00Z  odds-ingest        r14       BLOCKED     no longer live in stg: replaced by r15 at 2026-10-08T12:30:00Z. Redeploy r14 to stg and let it soak 120m again, or promote the live revision r15 instead (WAIT until 2026-10-08T14:30:00Z)
+2026-10-08T13:00:00Z  odds-ingest        r15       WAIT        live and healthy in stg since 2026-10-08T12:30:00Z (30m of 120m); promotable at 2026-10-08T14:30:00Z if it stays live and healthy
+2026-10-08T10:40:00Z  settlement-writer  r7        BLOCKED     unhealthy in stg since 2026-10-08T10:30:00Z (event e-011). Fix the pods; once it recovers or is redeployed, the soak starts again and needs 120m
+2026-10-08T12:00:00Z  settlement-writer  r7        BLOCKED     line 15 of the event stream is unusable (not valid JSON) and may be about this service: event e-050 at 2026-10-08T11:05:00Z, env stg, service starting "settlem". Have the producer redeliver it; it then decides. Without it the gate would say WAIT: live and healthy in stg since 2026-10-08T10:45:00Z (75m of 120m); promotable at 2026-10-08T12:45:00Z if it stays live and healthy
+2026-10-08T12:00:00Z  rfq-router         r3        WAIT        live and healthy in stg since 2026-10-08T10:30:00Z (90m of 120m); promotable at 2026-10-08T12:30:00Z if it stays live and healthy
+2026-10-08T12:00:00Z  rfq-router         r4        BLOCKED     no longer live in stg: replaced by r3 at 2026-10-08T10:30:00Z. Redeploy r4 to stg and let it soak 120m again, or promote the live revision r3 instead (WAIT until 2026-10-08T12:30:00Z)
+2026-10-08T12:00:00Z  trader-ui          r22       BLOCKED     r22 has never been live and healthy in stg. Deploy it to stg; it becomes promotable 120m after it is live there. Note: it is already deployed to prd (at 2026-10-08T08:15:00Z) although it never soaked in stg
+2026-10-08T12:00:00Z  book-builder       r9        PROMOTABLE  live and healthy in stg since 2026-10-08T09:30:00Z (150m, soak needs 120m)
+2026-10-08T12:00:00Z  book-builder       r10       BLOCKED     r10 has never been live and healthy in stg. Deploy it to stg; it becomes promotable 120m after it is live there
+
+# input defects (none dropped silently)
+- line 12 e-041: non-utc: timestamp "2026-10-08T10:30:00+01:00" is not UTC; read as 2026-10-08T09:30:00Z
+- line 15 e-050: unreadable: not valid JSON (unexpected end of JSON input); recoverable fields: event e-050 at 2026-10-08T11:05:00Z, env stg, service starting "settlem"
+- line 17 e-022: id-conflict: id also used on line 10 with different content (degraded r4 at 2026-10-08T09:20:00Z); both kept, the producer must issue unique ids
+- line 19 e-003: duplicate: identical to line 6; counted once
+
+# past promotions the gate would have refused
+- line 7 e-030: trader-ui r22 deployed to prd at 2026-10-08T08:15:00Z: gate says BLOCKED: r22 has never been live and healthy in stg. Deploy it to stg; it becomes promotable 120m after it is live there. Note: it is already deployed to prd (at 2026-10-08T08:15:00Z) although it never soaked in stg
