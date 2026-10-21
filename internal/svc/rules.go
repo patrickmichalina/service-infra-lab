@@ -28,6 +28,7 @@ func CheckEnv(s *Spec, p *Platform, env string) []Finding {
 	fs = append(fs, checkR8(s, p, env)...)
 	fs = append(fs, checkEnvRemoval(s, p, env)...)
 	fs = append(fs, checkS3Reachable(s, e)...)
+	fs = append(fs, checkCounterparties(s, p, env)...)
 	for i := range fs {
 		fs[i].Envs = []string{env}
 	}
@@ -339,6 +340,10 @@ func checkR4(s *Spec, p *Platform) []Finding {
 	for i, r := range s.Ingress {
 		path := fmt.Sprintf("ingress[%d]", i)
 		switch {
+		case r.Counterparty != "":
+			fs = append(fs, errorf("R4", path+".counterparty",
+				"remove it. If a partner must connect in, ask the platform team: inbound partner access is set up at the edge, not in a spec",
+				"a counterparty is an egress destination: the platform's sessions with brokers and venues are opened from inside"))
 		case r.Namespace != "" && r.CIDR != "":
 			fs = append(fs, errorf("R4", path, "split it into two rules", "a rule names a namespace or a cidr, not both"))
 		case r.Namespace == "" && r.CIDR == "", r.Namespace != "" && !dnsLabel.MatchString(r.Namespace):
@@ -371,17 +376,23 @@ func checkR4(s *Spec, p *Platform) []Finding {
 	for i, r := range s.Egress {
 		path := fmt.Sprintf("egress[%d]", i)
 		switch {
+		case r.Counterparty != "" && (r.Namespace != "" || r.CIDR != ""):
+			fs = append(fs, errorf("R4", path, "split it into one rule per destination", "a rule names one destination: a namespace, a cidr or a counterparty"))
+		case r.Counterparty != "" && !dnsLabel.MatchString(r.Counterparty):
+			fs = append(fs, errorf("R4", path+".counterparty", "write the counterparty's catalog name, e.g. counterparty: venue-a-fix", "%q is not a counterparty name", r.Counterparty))
+		case r.Counterparty != "":
+			// Whether it exists and this team may use it depends on the environment's catalog (checkCounterparties).
 		case r.Namespace != "" && r.CIDR != "":
 			fs = append(fs, errorf("R4", path, "split it into two rules", "a rule names a namespace or a cidr, not both"))
 		case r.Namespace == "" && r.CIDR == "":
-			fs = append(fs, errorf("R4", path, `name where traffic goes: - namespace: <ns>, or - cidr: "{vpcCidr}" for the VPC`, "an egress rule must name a destination"))
+			fs = append(fs, errorf("R4", path, `name where traffic goes: - namespace: <ns>, - cidr: "{vpcCidr}" for the VPC, or - counterparty: <name> for a broker or venue`, "an egress rule must name a destination"))
 		case r.Namespace != "" && !dnsLabel.MatchString(r.Namespace):
 			fs = append(fs, errorf("R4", path+".namespace", "add one rule per namespace you call: - namespace: <its name>, ports: [<port>]",
 				"%q is not a namespace name; egress must name each namespace it reaches", r.Namespace))
 		case r.CIDR == "0.0.0.0/0":
 			if !slices.Equal(r.Ports, []int{443}) || !meaningful(r.Reason) {
 				fs = append(fs, errorf("R4", path,
-					`internet egress is allowed only as - cidr: 0.0.0.0/0, ports: [443], hosts: [<the endpoints you call>], reason: <why>. Traffic inside the VPC needs its own rule: - cidr: "{vpcCidr}", ports: [<port>]`,
+					`internet egress is allowed only as - cidr: 0.0.0.0/0, ports: [443], hosts: [<the endpoints you call>], reason: <why>. Traffic inside the VPC needs its own rule: - cidr: "{vpcCidr}", ports: [<port>]. A broker or venue session is - counterparty: <its catalog name>, ports: [<port>]`,
 					"egress to 0.0.0.0/0 is allowed only on port 443 and only with a reason (got ports %v, reason %q)", r.Ports, r.Reason))
 			}
 			fs = append(fs, checkHosts(path+".hosts", r.Hosts)...)
@@ -390,7 +401,7 @@ func checkR4(s *Spec, p *Platform) []Finding {
 		case r.CIDR != "" && r.CIDR != vpcToken:
 			fs = append(fs, literalCIDR(path+".cidr", r.CIDR, p, true))
 		}
-		if len(r.Ports) == 0 && r.CIDR != "0.0.0.0/0" && (r.Namespace != "" || r.CIDR != "") {
+		if len(r.Ports) == 0 && r.CIDR != "0.0.0.0/0" && (r.Namespace != "" || r.CIDR != "" || r.Counterparty != "") {
 			fs = append(fs, errorf("R4", path+".ports", "list the ports, e.g. ports: [5432]", "no ports listed, which would open every port"))
 		}
 		fs = append(fs, checkPorts(path, r.Ports)...)
@@ -451,12 +462,87 @@ func literalCIDR(path, cidr string, p *Platform, egress bool) Finding {
 		}
 	}
 	fix := `it is inside the VPC: write cidr: "{vpcCidr}" (the platform fills in each environment's range), or "{albSubnets}" for the internal load balancer`
-	if !inside && egress {
+	if name, c, ok := counterpartyAt(cidr, p); ok && egress {
+		fix = fmt.Sprintf("it is counterparty %s's endpoint: write - counterparty: %s, ports: %v. The platform fills in each environment's addresses", name, name, c.Ports)
+	} else if !inside && egress {
 		fix = "it is outside the VPC: write - cidr: 0.0.0.0/0, ports: [443], hosts: [<the endpoint, e.g. login.example.com>], reason: <why, e.g. auth provider>"
 	} else if !inside {
 		fix = "ingress from outside the VPC arrives through the internal load balancer: write cidr: \"{albSubnets}\" with a reason"
 	}
 	return errorf("R4", path, fix, "%q is a literal CIDR; network rules use the {vpcCidr} token or 0.0.0.0/0 on 443 (and CIDRs never appear in a service repository, R5)", cidr)
+}
+
+// counterpartyAt finds the catalog counterparty, in any environment, whose
+// endpoints overlap cidr: a literal address in a spec is most often a partner's.
+func counterpartyAt(cidr string, p *Platform) (string, Counterparty, bool) {
+	pfx, err := netip.ParsePrefix(cidr)
+	if err != nil {
+		if a, err := netip.ParseAddr(cidr); err == nil {
+			pfx = netip.PrefixFrom(a, a.BitLen())
+		} else {
+			return "", Counterparty{}, false
+		}
+	}
+	for _, env := range p.EnvOrder {
+		cat := p.Envs[env].Catalog
+		for _, name := range sortedKeys(cat.Counterparties) {
+			c := cat.Counterparties[name]
+			for _, block := range c.CIDRs {
+				if b, err := netip.ParsePrefix(block); err == nil && b.Overlaps(pfx) {
+					return name, c, true
+				}
+			}
+		}
+	}
+	return "", Counterparty{}, false
+}
+
+// checkCounterparties holds a counterparty rule to this environment's catalog: the
+// counterparty exists here, this team is cleared to connect to it, and only on the
+// ports it accepts sessions on.
+func checkCounterparties(s *Spec, p *Platform, env string) []Finding {
+	t := team(s, p)
+	cat := p.Envs[env].Catalog
+	var fs []Finding
+	for i, r := range s.Egress {
+		if r.Counterparty == "" || r.Namespace != "" || r.CIDR != "" || !dnsLabel.MatchString(r.Counterparty) {
+			continue // checkR4 reports these
+		}
+		path := fmt.Sprintf("egress[%d].counterparty", i)
+		var cleared []string
+		for _, name := range sortedKeys(cat.Counterparties) {
+			if slices.Contains(cat.Counterparties[name].Teams, t) {
+				cleared = append(cleared, name)
+			}
+		}
+		c, ok := cat.Counterparties[r.Counterparty]
+		switch {
+		case !ok:
+			fs = append(fs, errorf("R4", path,
+				fmt.Sprintf("use a counterparty your team is cleared for (%s), or ask the platform team to onboard this one: it needs a connection agreement and allow-listed addresses on both sides", orNone(cleared)),
+				"counterparty %q is not in the %s catalog", r.Counterparty, env))
+			continue
+		case !slices.Contains(c.Teams, t):
+			fs = append(fs, errorf("R4", path,
+				fmt.Sprintf("ask the platform team to clear team %s for %s (a session with a partner is a contract, so it is not self-service). Cleared for your team today: %s", t, r.Counterparty, orNone(cleared)),
+				"team %s is not cleared to connect to counterparty %s", t, r.Counterparty))
+			continue
+		}
+		for j, port := range r.Ports {
+			if !slices.Contains(c.Ports, port) {
+				fs = append(fs, errorf("R4", fmt.Sprintf("egress[%d].ports[%d]", i, j), fmt.Sprintf("ports: %v", c.Ports),
+					"%s accepts sessions only on %v, not %d", r.Counterparty, c.Ports, port))
+			}
+		}
+	}
+	return fs
+}
+
+func orNone(names []string) string {
+	if len(names) == 0 {
+		return "none"
+	}
+	return strings.Join(names, ", ")
 }
 
 // ---- R5: no environment facts in the repository -----------------------------------

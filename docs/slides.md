@@ -61,7 +61,7 @@ They never write accounts, ARNs, CIDRs, the boundary, the trust policy, the name
 | R8 used permissions | grants vs **observed usage** | – | usage data source |
 
 Render can say *what to write instead*. Admission is held to be at least as strict, so it holds when render is wrong
-or bypassed. Proven on a real API server: every rendered object admitted, 47 hostile objects refused (159 checks).
+or bypassed. Proven on a real API server: every rendered object admitted, 51 hostile objects refused (167 checks).
 
 ---
 
@@ -122,6 +122,17 @@ Ways the input misleads a naive gate, each with a test:
 - a truncated line → **fail closed, scoped:** "BLOCKED; otherwise WAIT until 12:45".
 
 The tests caught seven deliberate naive mutations.
+
+---
+
+## What a trading venue changes
+
+- **Brokers and venues are catalog entries (built).** `counterparty: venue-a-fix`: the platform holds the
+  allow-listed addresses, ports and the teams cleared for it. Proven on a cluster against a stand-in gateway.
+- **FIX sessions are stateful:** one active holder, rolled at the venue's session boundary.
+- **Rollback never waits for the soak gate.** As written, the gate would block it.
+- **Change windows:** no prd sync in market hours or settlement runs, except a rollback. One more gate input.
+- **Audit for free:** spec commit → bot MR → gate verdict → who synced. The syncer is not the author.
 
 ---
 

@@ -1,7 +1,9 @@
 # example-org/rfq-router after reading the verdict. The chart's ClusterRole became a Role;
 # buckets and callers are named (the names here are illustrative: the request gave none);
 # the data-account access went to the platform team as a separate request; the state team
-# copied the venue credentials to /<env>/normalization/rfq-router/.
+# copied the venue credentials to /<env>/normalization/rfq-router/. The venue it routes to
+# is the catalog's venue-a-fix (also illustrative): "allow all" egress becomes the
+# partner's own endpoints, without any address in this repository.
 service: rfq-router
 team: normalization
 environments: [stg, prd]
@@ -22,6 +24,9 @@ egress:
     ports: [443]
     hosts: [aws:s3]
     reason: S3 through the VPC gateway endpoint
+  - counterparty: venue-a-fix
+    ports: [9880]
+    reason: FIX session to venue A, with the venue credentials below
 
 permissions:
   - actions: [s3:GetObject, s3:PutObject]

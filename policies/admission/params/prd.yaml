@@ -11,5 +11,7 @@ data:
   awsAccountId: "333333333333"
   vpcCidr: 10.30.0.0/16
   albSubnets: 10.30.240.0/24,10.30.241.0/24
+  # counterparties.<team>: the cidr:port pairs that team may reach, from the catalog
+  counterparties.normalization: 192.0.2.16/28:9880
   teams: ingestion,state,normalization,distribution   # each team's namespace and project share its name
   platformProjects: platform

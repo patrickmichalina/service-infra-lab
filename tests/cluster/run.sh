@@ -16,6 +16,7 @@ mkdir -p "$work"
 export KUBECONFIG=$PWD/$here/.kubeconfig
 cluster=takehome
 fqdn_cluster=takehome-fqdn
+venue=takehome-venue # a stand-in for venue A's FIX gateway, on its catalog range (stg)
 
 ack_iam=1.10.1 ack_eks=1.24.3 ack_ecr=1.10.1
 eso=2.13.0 argocd=v3.5.6 cilium=1.20.3
@@ -31,7 +32,9 @@ teardown() {
     echo "KEEP=1: cluster $cluster left running (kind delete cluster --name $cluster)"
     return
   fi
+  docker rm -f "$venue" >/dev/null 2>&1 || true
   kind delete cluster --name "$cluster" --kubeconfig "$KUBECONFIG" >/dev/null 2>&1 || true
+  docker network rm "$venue" >/dev/null 2>&1 || true
   kind delete cluster --name "$fqdn_cluster" --kubeconfig "$work/fqdn.kubeconfig" >/dev/null 2>&1 || true
   rm -f "$KUBECONFIG" "$work/fqdn.kubeconfig"
   echo "cluster deleted"
@@ -276,6 +279,20 @@ kubectl -n distribution patch networkpolicy trader-ui --type=json -p '[{"op":"re
 check allowed monitoring prometheus "$(ip distribution trader-ui):3000" "trader-ui ingress from {vpcCidr} instead: every pod in the cluster gets in"
 kubectl apply --server-side --field-manager=platform --force-conflicts -f out/render-fixed/stg/trader-ui/networkpolicy.yaml >/dev/null
 check denied monitoring prometheus "$(ip distribution trader-ui):3000" "restored to {albSubnets}"
+
+echo "counterparty: venue A's FIX gateway, simulated on its catalog range (a Docker network the node is attached to)"
+venue_cidr=$(sed -n '/venue-a-fix:/,/cidrs:/s/.*cidrs: \[\(.*\)\]/\1/p' platform/catalog/stg.yaml)
+venue_ip=198.51.100.20
+docker network inspect "$venue" >/dev/null 2>&1 || docker network create --subnet "$venue_cidr" "$venue" >/dev/null
+docker network connect "$venue" "$cluster-control-plane" >/dev/null 2>&1 || true
+docker rm -f "$venue" >/dev/null 2>&1 || true
+docker pull -q "$agnhost" >/dev/null
+docker run -d --name "$venue" --network "$venue" --ip "$venue_ip" -e SERVE_PORT_9880=venue-a-fix -e SERVE_PORT_9881=other "$agnhost" porter >/dev/null
+for _ in $(seq 30); do can sandbox sandbox-client "$venue_ip:9880" && break; sleep 1; done
+check allowed sandbox sandbox-client "$venue_ip:9881" "control: a pod with no policy reaches the venue on any port, so a denial below is the policy"
+check allowed normalization rfq-router "$venue_ip:9880" "rfq-router's counterparty: venue-a-fix rule, rendered as $venue_cidr:9880"
+check denied normalization rfq-router "$venue_ip:9881" "the venue's address on a port the catalog does not list"
+check denied ingestion odds-ingest "$venue_ip:9880" "a team the catalog does not clear for venue-a-fix"
 
 # ---------------------------------------------------------------------------------------
 step "alternative design: R8 at admission (an update that removes access must say so)"

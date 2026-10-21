@@ -1,6 +1,6 @@
 # The alternative design, as far as it can be proven here
 
-[`docs/design.md` §8](../docs/design.md#8-what-i-would-build-instead) argues for a simpler design that puts every
+[`docs/design.md` §9](../docs/design.md#9-what-i-would-build-instead) argues for a simpler design that puts every
 rule at a chokepoint no team can route around. These files are its pieces that can exist without an AWS account,
 and what has been proven about each.
 

@@ -44,17 +44,19 @@ type Spec struct {
 	Digest string    `yaml:"-"` // sha256 of the file, stamped on what it renders
 }
 
-// Peer is one side of a network rule: a namespace, or a CIDR token. Hosts
+// Peer is one side of a network rule: a namespace, a CIDR token, or a
+// counterparty (a broker or venue the platform catalog knows). Hosts
 // names the endpoints an internet rule is for; a NetworkPolicy cannot match
 // them, but they make the rule's purpose checkable and are what an FQDN-aware
 // network layer enforces.
 type Peer struct {
-	Namespace string               `yaml:"namespace"`
-	CIDR      string               `yaml:"cidr"`
-	Ports     []int                `yaml:"ports"`
-	Hosts     []string             `yaml:"hosts"`
-	Reason    string               `yaml:"reason"`
-	Unknown   map[string]yaml.Node `yaml:",inline"`
+	Namespace    string               `yaml:"namespace"`
+	CIDR         string               `yaml:"cidr"`
+	Counterparty string               `yaml:"counterparty"` // a broker or venue in the platform catalog (egress only)
+	Ports        []int                `yaml:"ports"`
+	Hosts        []string             `yaml:"hosts"`
+	Reason       string               `yaml:"reason"`
+	Unknown      map[string]yaml.Node `yaml:",inline"`
 }
 
 // Permission is one IAM statement, with resources written as platform

@@ -22,7 +22,7 @@
    - error R3 at secrets[0].ssm: rfq-router belongs to team normalization and may read only parameters under /<env>/normalization/; "/state/rfq-router/venue-credentials" is under team state
         fix: create the parameter under your team as /<env>/normalization/rfq-router/venue-credentials in each environment (team state owns the current value and can copy it, or hand it to you), then write ssm: /normalization/rfq-router/venue-credentials
    - error R4 at egress[0]: egress to 0.0.0.0/0 is allowed only on port 443 and only with a reason (got ports [], reason "")
-        fix: internet egress is allowed only as - cidr: 0.0.0.0/0, ports: [443], hosts: [<the endpoints you call>], reason: <why>. Traffic inside the VPC needs its own rule: - cidr: "{vpcCidr}", ports: [<port>]
+        fix: internet egress is allowed only as - cidr: 0.0.0.0/0, ports: [443], hosts: [<the endpoints you call>], reason: <why>. Traffic inside the VPC needs its own rule: - cidr: "{vpcCidr}", ports: [<port>]. A broker or venue session is - counterparty: <its catalog name>, ports: [<port>]
    - error R4 at egress[0].hosts: internet egress must name the hosts it is for
         fix: hosts: [<each endpoint you call, e.g. feed.vendor-example.com>]; for S3 through its endpoint, aws:s3
    - error R4 at ingress[0]: an ingress rule must name the namespace traffic comes from; allowing all would let any pod in any namespace reach this service

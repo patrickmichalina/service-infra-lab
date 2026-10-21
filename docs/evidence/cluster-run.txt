@@ -54,19 +54,19 @@ ok    admitted policies/admission/tests/good.yaml
 ok    refused 00-NetworkPolicy-np-empty-selector [empty podSelector with rules: widens the whole namespace]: a NetworkPolicy selects exactly one service's pods by app.kubernetes.io/name; an empty podSelector is allowed only for a deny-all with no rules (R4)
 ok    refused 01-NetworkPolicy-np-any-namespace [ingress from every namespace]: ingress must name each namespace it admits (kubernetes.io/metadata.name), or come from exactly this cluster's VPC range or load balancer subnets (R4)
 ok    refused 02-NetworkPolicy-np-internet-all-ports [internet egress on every port]: every rule must list its peers and its ports; a rule without from/to or ports allows everything (R4)
-ok    refused 03-NetworkPolicy-np-literal-external [a literal address outside the VPC]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, or the internet on 443 only and excluding the VPC; nothing else, and no other literal address (R4)
+ok    refused 03-NetworkPolicy-np-literal-external [a literal address outside the VPC]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the internet on 443 only and excluding the VPC; nothing else, an
 ok    refused 04-NetworkPolicy-b1-ingress-from-internet [b1: ingress from the whole internet]: ingress must name each namespace it admits (kubernetes.io/metadata.name), or come from exactly this cluster's VPC range or load balancer subnets (R4)
-ok    refused 05-NetworkPolicy-b2-egress-all-namespaces [b2: egress to every namespace]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, or the internet on 443 only and excluding the VPC; nothing else, and no other literal address (R4)
-ok    refused 06-NetworkPolicy-b3-stg-to-prd-vpc [b3: stg egress to the prd VPC]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, or the internet on 443 only and excluding the VPC; nothing else, and no other literal address (R4)
-ok    refused 07-NetworkPolicy-b4-ten-slash-8 [b4: egress to all of 10.0.0.0/8]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, or the internet on 443 only and excluding the VPC; nothing else, and no other literal address (R4)
+ok    refused 05-NetworkPolicy-b2-egress-all-namespaces [b2: egress to every namespace]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the internet on 443 only and excluding the VPC; nothing else, an
+ok    refused 06-NetworkPolicy-b3-stg-to-prd-vpc [b3: stg egress to the prd VPC]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the internet on 443 only and excluding the VPC; nothing else, an
+ok    refused 07-NetworkPolicy-b4-ten-slash-8 [b4: egress to all of 10.0.0.0/8]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the internet on 443 only and excluding the VPC; nothing else, an
 ok    refused 08-NetworkPolicy-b5-selector-exists [b5: a selector widened by matchExpressions]: a NetworkPolicy selects exactly one service's pods by app.kubernetes.io/name; an empty podSelector is allowed only for a deny-all with no rules (R4)
 ok    refused 09-NetworkPolicy-b9-unlabelled-namespace [b9: allow-all in a namespace nobody labelled]: a NetworkPolicy selects exactly one service's pods by app.kubernetes.io/name; an empty podSelector is allowed only for a deny-all with no rules (R4)
 ok    refused 10-NetworkPolicy-rule-without-ports [a rule without ports opens every port]: every rule must list its peers and its ports; a rule without from/to or ports allows everything (R4)
 ok    refused 11-NetworkPolicy-rule-without-peers [an egress rule without to reaches everywhere]: every rule must list its peers and its ports; a rule without from/to or ports allows everything (R4)
 ok    refused 12-NetworkPolicy-port-range [a port range]: every port must be one port; a port entry without a port, or a range, opens more than the spec asked for (R4)
-ok    refused 13-NetworkPolicy-selector-with-expressions [a namespaceSelector naming every namespace but one]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, or the internet on 443 only and excluding the VPC; nothing else, and no other literal address (R4)
+ok    refused 13-NetworkPolicy-selector-with-expressions [a namespaceSelector naming every namespace but one]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the internet on 443 only and excluding the VPC; nothing else, an
 ok    refused 14-NetworkPolicy-internet-without-hosts [internet egress without the hosts annotation]: internet egress must record the hosts it is for in the platform.example.org/egress-hosts annotation (R4)
-ok    refused 15-NetworkPolicy-internet-not-excluding-vpc [internet egress that does not exclude this VPC]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, or the internet on 443 only and excluding the VPC; nothing else, and no other literal address (R4)
+ok    refused 15-NetworkPolicy-internet-not-excluding-vpc [internet egress that does not exclude this VPC]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the internet on 443 only and excluding the VPC; nothing else, an
 ok    refused 16-Role-role-no-boundary [no boundary]: a service role must carry this account's service-boundary permissions boundary (R2)
 ok    refused 17-Role-role-star [s3:* on *]: "*" as an action or a resource is never allowed (R2)
 ok    refused 18-Role-b6-unicode-star [b6: s3:* on * written as JSON escapes]: policy documents may not contain a backslash: JSON escapes (\u002a is *) would hide what the policy grants from every check (R2)
@@ -98,6 +98,10 @@ ok    refused 43-AppProject-distribution [a team project allowed NetworkPolicy]:
 ok    refused 44-PodIdentityAssociation-pia-target-role [role chaining: a second role the boundary does not cover]: no role chaining: targetRoleARN would let the pod assume a second role the boundary does not cover (R2)
 ok    refused 45-PodIdentityAssociation-pia-no-session-tags [session tags off: trust conditions and ABAC stop holding]: session tags stay on: the role's trust policy and ABAC conditions depend on them (R2)
 ok    refused 46-NetworkPolicy-ingress-other-subnet [ingress from a range that only looks like the ALB subnets]: ingress must name each namespace it admits (kubernetes.io/metadata.name), or come from exactly this cluster's VPC range or load balancer subnets (R4)
+ok    refused 47-NetworkPolicy-np-counterparty-wider [a counterparty range widened beyond the venue's endpoints]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the internet on 443 only and excluding the VPC; nothing else, an
+ok    refused 48-NetworkPolicy-np-counterparty-other-port [the venue's endpoints, on a port the venue does not accept sessions on]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the internet on 443 only and excluding the VPC; nothing else, an
+ok    refused 49-NetworkPolicy-np-counterparty-other-team [the venue's endpoints from a team the catalog does not clear for it]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the internet on 443 only and excluding the VPC; nothing else, an
+ok    refused 50-NetworkPolicy-np-counterparty-prd-from-stg [prd's venue endpoints from the stg cluster]: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the internet on 443 only and excluding the VPC; nothing else, an
 
 ## prd parameters: prd objects are admitted, stg objects are not
 ok    admitted (dry run, prd) out/render-fixed/prd/odds-ingest/application-infra.yaml
@@ -138,7 +142,7 @@ ok    admitted (dry run, prd) out/render/prd/settlement-writer/externalsecret.ya
 ok    admitted (dry run, prd) out/render/prd/settlement-writer/networkpolicy.yaml
 ok    admitted (dry run, prd) out/render/prd/settlement-writer/serviceaccount.yaml
 ok    stg object refused under prd parameters: out/render-fixed/stg/odds-ingest/iam-role.yaml: a service role must carry this account's service-boundary permissions boundary (R2)
-ok    stg object refused under prd parameters: out/render-fixed/stg/odds-ingest/networkpolicy.yaml: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, or the internet on 443 only and excluding the VPC; nothing else, a
+ok    stg object refused under prd parameters: out/render-fixed/stg/odds-ingest/networkpolicy.yaml: egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the 
 ok    stg object refused under prd parameters: out/render-fixed/stg/odds-ingest/pod-identity-association.yaml: a service account is bound only to its own role, arn:aws:iam::<account>:role/svc-<namespace>-<service account> (R2)
 
 ## External Secrets: the rendered ExternalSecrets sync (fake provider standing in for SSM)
@@ -160,7 +164,7 @@ ok    no allow-all NetworkPolicy reached ingestion
 ok    no chart ClusterRole reached the cluster
 
 ## network: the rendered stg policies, enforced (pods have VPC-range addresses here)
-pod addresses: odds-ingest 10.20.0.16, victim 10.20.0.21, sandbox-victim 10.20.0.22 (stg VPC 10.20.0.0/16)
+pod addresses: odds-ingest 10.20.0.16, victim 10.20.0.20, sandbox-victim 10.20.0.22 (stg VPC 10.20.0.0/16)
 ok    allowed: monitoring/prometheus -> 10.20.0.16:8080 (declared: Prometheus scrape)
 ok    denied: sandbox/sandbox-client -> 10.20.0.16:8080 (undeclared namespace)
 ok    denied: monitoring/prometheus -> 10.20.0.16:9090 (undeclared port)
@@ -169,14 +173,19 @@ ok    denied: ingestion/odds-ingest -> 10.20.0.17:9090 (odds-ingest declares no 
 ok    allowed: ingestion/odds-ingest -> kube-dns.kube-system.svc.cluster.local:53 (platform DNS baseline (the name resolves, then TCP 53))
 ok    allowed: ingestion/odds-ingest -> 1.1.1.1:443 (internet egress on 443)
 ok    denied: ingestion/odds-ingest -> 1.1.1.1:80 (internet egress on another port)
-ok    denied: monitoring/prometheus -> 10.20.0.20:8080 (a pod no service policy selects: platform default-deny)
+ok    denied: monitoring/prometheus -> 10.20.0.19:8080 (a pod no service policy selects: platform default-deny)
 ok    denied: ingestion/stray -> 1.1.1.1:443 (default-deny egress for the stray pod)
-ok    denied: monitoring/prometheus -> 10.20.0.18:3000 (trader-ui admits {albSubnets} only; no pod is in those subnets)
+ok    denied: monitoring/prometheus -> 10.20.0.21:3000 (trader-ui admits {albSubnets} only; no pod is in those subnets)
 A13: what {vpcCidr} means when pods have VPC addresses
 ok    allowed: ingestion/odds-ingest -> 10.20.0.22:9098 (odds-ingest egress {vpcCidr}:9098 reaches a pod in a namespace without a baseline)
-ok    denied: ingestion/odds-ingest -> 10.20.0.21:9098 (the same egress, to a pod in a team namespace: the default-deny baseline stops it)
-ok    allowed: monitoring/prometheus -> 10.20.0.18:3000 (trader-ui ingress from {vpcCidr} instead: every pod in the cluster gets in)
-ok    denied: monitoring/prometheus -> 10.20.0.18:3000 (restored to {albSubnets})
+ok    denied: ingestion/odds-ingest -> 10.20.0.20:9098 (the same egress, to a pod in a team namespace: the default-deny baseline stops it)
+ok    allowed: monitoring/prometheus -> 10.20.0.21:3000 (trader-ui ingress from {vpcCidr} instead: every pod in the cluster gets in)
+ok    denied: monitoring/prometheus -> 10.20.0.21:3000 (restored to {albSubnets})
+counterparty: venue A's FIX gateway, simulated on its catalog range (a Docker network the node is attached to)
+ok    allowed: sandbox/sandbox-client -> 198.51.100.20:9881 (control: a pod with no policy reaches the venue on any port, so a denial below is the policy)
+ok    allowed: normalization/rfq-router -> 198.51.100.20:9880 (rfq-router's counterparty: venue-a-fix rule, rendered as 198.51.100.16/28:9880)
+ok    denied: normalization/rfq-router -> 198.51.100.20:9881 (the venue's address on a port the catalog does not list)
+ok    denied: ingestion/odds-ingest -> 198.51.100.20:9880 (a team the catalog does not clear for venue-a-fix)
 
 ## alternative design: R8 at admission (an update that removes access must say so)
 ok    dropping an egress rule is refused: this update removes a network rule settlement-writer uses today; if that is intended, say why in the platform.example.org/acknowledge-removal annotation (R8)
@@ -190,6 +199,6 @@ ok    denied: odds-ingest -> example.org:443 (another host on the same port)
 ok    denied: odds-ingest -> 1.1.1.1:443 (an address with no name: 0.0.0.0/0:443 would have allowed it)
 
 ## result
-159 passed, 0 failed
+167 passed, 0 failed
 cluster deleted
 exit 0

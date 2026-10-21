@@ -7,8 +7,9 @@
 #     deny-all (empty podSelector with no rules at all);
 #   - every rule names its peers and its ports (a rule without them means "all");
 #   - a peer is one namespace by name, the VPC (exactly this cluster's vpcCidr), the load
-#     balancer subnets (ingress), the Pod Identity agent, or the internet on 443 only, excluding the VPC, with the hosts the
-#     rule is for recorded in the platform.example.org/egress-hosts annotation.
+#     balancer subnets (ingress), the Pod Identity agent, a counterparty endpoint this team is cleared for (egress, exact
+#     cidr and port, from the parameters), or the internet on 443 only, excluding the VPC, with the hosts the rule is for
+#     recorded in the platform.example.org/egress-hosts annotation.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -34,6 +35,8 @@ spec:
       expression: "object.spec.podSelector"
     - name: vpc
       expression: "params.data.vpcCidr"
+    - name: counterparties # cidr:port pairs this namespace's team may reach
+      expression: "params.data[?('counterparties.' + object.metadata.namespace)].orValue('').split(',')"
   validations:
     - expression: >-
         (!has(variables.selector.matchExpressions) &&
@@ -65,10 +68,13 @@ spec:
            p.namespaceSelector.matchLabels.exists(k, k == 'kubernetes.io/metadata.name')) ||
           (has(p.ipBlock) && !has(p.namespaceSelector) && !has(p.podSelector) && !has(p.ipBlock.except) &&
            (p.ipBlock.cidr == variables.vpc || p.ipBlock.cidr == '169.254.170.23/32')) ||
+          (has(p.ipBlock) && !has(p.namespaceSelector) && !has(p.podSelector) && !has(p.ipBlock.except) &&
+           r.ports.all(q, q.?protocol.orValue('TCP') == 'TCP' &&
+             (p.ipBlock.cidr + ':' + string(q.port)) in variables.counterparties)) ||
           (has(p.ipBlock) && !has(p.namespaceSelector) && !has(p.podSelector) && p.ipBlock.cidr == '0.0.0.0/0' &&
            variables.vpc in p.ipBlock.?except.orValue([]) &&
            r.ports.size() == 1 && r.ports[0].port == 443 && r.ports[0].?protocol.orValue('TCP') == 'TCP')))
-      message: "egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, or the internet on 443 only and excluding the VPC; nothing else, and no other literal address (R4)"
+      message: "egress may reach a named namespace, exactly this cluster's VPC range, the Pod Identity agent, a counterparty endpoint and port this team is cleared for, or the internet on 443 only and excluding the VPC; nothing else, and no other literal address (R4)"
     - expression: >-
         !variables.egress.exists(r, r.to.exists(p, has(p.ipBlock) && p.ipBlock.cidr == '0.0.0.0/0')) ||
         object.metadata.?annotations.orValue({})[?'platform.example.org/egress-hosts'].orValue('') != ''

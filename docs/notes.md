@@ -70,6 +70,11 @@ Rough, in the order things happened. The decisions I expect to be asked about ar
   silent pass.
 - **(decision) A fleet check across specs** for one-sided network rules. Policies are enforced at both ends, so one
   side alone admits nothing.
+- **(decision) Brokers and venues are catalog entries, not CIDRs.** A FIX session goes to fixed, allow-listed
+  addresses, so refusing every literal address would leave rfq-router no way to reach its venue. A spec names a
+  `counterparty`. The catalog holds its addresses, ports and the teams cleared for it, and admission gets the same
+  facts as `cidr:port` pairs per team (a test keeps the two equal). Clearing a team is a platform change on purpose: a
+  partner session is a contract ([design §6](design.md#6-what-a-trading-venue-changes)).
 - **Verdicts:** see `out/render/verdicts.txt`. The fixed specs in `specs/fixed/` follow each fix literally and come
   out clean; a test keeps it that way.
 
@@ -87,6 +92,8 @@ Rough, in the order things happened. The decisions I expect to be asked about ar
 - **Load-balancer subnets** (`albSubnets` in `platform/catalog/`) and the auth provider's host
   (`login.auth-provider.example` in the fixed trader-ui).
 - **Buckets and callers in the fixed rfq-router:** `rfq-audit`, and callers in its own namespace.
+- **The counterparty `venue-a-fix`** (`platform/catalog/`): its address blocks (documentation ranges, RFC 5737), the
+  port `9880`, the cleared team, and that rfq-router opens a FIX session to it.
 - **Assumptions, still unverified:**
   - S3 is reached through a **gateway** endpoint (drives the S3 warning).
   - The `ack-services` and `services-infra` names.

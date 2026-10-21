@@ -500,3 +500,39 @@ metadata: {name: ingress-other-subnet, namespace: distribution}
 spec:
   podSelector: {matchLabels: {app.kubernetes.io/name: trader-ui}}
   ingress: [{from: [{ipBlock: {cidr: 10.20.240.0/20}}], ports: [{port: 3000}]}]
+
+---
+# a counterparty range widened beyond the venue's endpoints
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: np-counterparty-wider, namespace: normalization}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: rfq-router}}
+  egress: [{to: [{ipBlock: {cidr: 198.51.100.0/24}}], ports: [{port: 9880, protocol: TCP}]}]
+
+---
+# the venue's endpoints, on a port the venue does not accept sessions on
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: np-counterparty-other-port, namespace: normalization}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: rfq-router}}
+  egress: [{to: [{ipBlock: {cidr: 198.51.100.16/28}}], ports: [{port: 22, protocol: TCP}]}]
+
+---
+# the venue's endpoints from a team the catalog does not clear for it
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: np-counterparty-other-team, namespace: ingestion}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: odds-ingest}}
+  egress: [{to: [{ipBlock: {cidr: 198.51.100.16/28}}], ports: [{port: 9880, protocol: TCP}]}]
+
+---
+# prd's venue endpoints from the stg cluster
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: np-counterparty-prd-from-stg, namespace: normalization}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: rfq-router}}
+  egress: [{to: [{ipBlock: {cidr: 192.0.2.16/28}}], ports: [{port: 9880, protocol: TCP}]}]

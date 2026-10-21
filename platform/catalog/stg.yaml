@@ -12,3 +12,11 @@ rds:
   settlements: {resourceId: db-STGSETTLEMENTS7Q2W3E4R5T6Y}
 kms:
   ui-assets: {keyId: 2f6c1d0e-aaaa-4b1c-9d2e-3f4a5b6c7d8e}
+# Brokers and venues with a connection agreement: fixed endpoints both sides allow-list
+# (a cross-connect or VPN in practice). Specs name them; only this file holds the
+# addresses. Invented, from documentation ranges (RFC 5737).
+counterparties:
+  venue-a-fix:       # venue A's FIX order-entry gateway, its UAT endpoints
+    cidrs: [198.51.100.16/28]
+    ports: [9880]
+    teams: [normalization]

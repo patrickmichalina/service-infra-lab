@@ -115,7 +115,7 @@ func Render(s *Spec, p *Platform, env string, refused map[string]bool) ([]Object
 			"podSelector": m{"matchLabels": m{nameLabel: s.Service}},
 			"policyTypes": []string{"Ingress", "Egress"},
 			"ingress":     ingressRules(s, e, refused),
-			"egress":      egressRules(s, cfg, refused, len(statements) > 0),
+			"egress":      egressRules(s, e, refused, len(statements) > 0),
 		},
 	}})
 
@@ -255,7 +255,8 @@ func ingressRules(s *Spec, e *Env, refused map[string]bool) []m {
 	return out
 }
 
-func egressRules(s *Spec, cfg EnvConfig, refused map[string]bool, hasRole bool) []m {
+func egressRules(s *Spec, e *Env, refused map[string]bool, hasRole bool) []m {
+	cfg := e.Config
 	// Platform baseline: every pod resolves names, and a pod with a role
 	// fetches its credentials from the node-local Pod Identity agent.
 	out := []m{{
@@ -269,17 +270,22 @@ func egressRules(s *Spec, cfg EnvConfig, refused map[string]bool, hasRole bool) 
 		if refused[fmt.Sprintf("egress[%d]", i)] {
 			continue
 		}
-		var to m
-		switch r.CIDR {
-		case vpcToken:
-			to = m{"ipBlock": m{"cidr": cfg.VPCCIDR}}
-		case "0.0.0.0/0":
+		var to []m
+		switch {
+		case r.Counterparty != "":
+			// The partner's allow-listed endpoints in this environment, exactly.
+			for _, cidr := range e.Catalog.Counterparties[r.Counterparty].CIDRs {
+				to = append(to, m{"ipBlock": m{"cidr": cidr}})
+			}
+		case r.CIDR == vpcToken:
+			to = []m{{"ipBlock": m{"cidr": cfg.VPCCIDR}}}
+		case r.CIDR == "0.0.0.0/0":
 			// The internet, not the VPC: in-VPC traffic must be declared on its own.
-			to = m{"ipBlock": m{"cidr": "0.0.0.0/0", "except": []string{cfg.VPCCIDR}}}
+			to = []m{{"ipBlock": m{"cidr": "0.0.0.0/0", "except": []string{cfg.VPCCIDR}}}}
 		default:
-			to = namespacePeer(r.Namespace)
+			to = []m{namespacePeer(r.Namespace)}
 		}
-		out = append(out, m{"to": []m{to}, "ports": ports(r.Ports)})
+		out = append(out, m{"to": to, "ports": ports(r.Ports)})
 	}
 	return out
 }

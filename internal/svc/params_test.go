@@ -1,6 +1,7 @@
 package svc
 
 import (
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -46,6 +47,32 @@ func TestAdmissionParamsMatchPlatformConfig(t *testing.T) {
 		}
 		if !slices.Equal(got, teams) {
 			t.Errorf("%s: params teams = %v, platform config has %v", env, got, teams)
+		}
+		// counterparties.<team> lists the cidr:port pairs the catalog clears that team for.
+		pairs := map[string][]string{}
+		for _, c := range e.Catalog.Counterparties {
+			for _, team := range c.Teams {
+				for _, cidr := range c.CIDRs {
+					for _, port := range c.Ports {
+						pairs["counterparties."+team] = append(pairs["counterparties."+team], fmt.Sprintf("%s:%d", cidr, port))
+					}
+				}
+			}
+		}
+		for k, v := range cm.Data {
+			if strings.HasPrefix(k, "counterparties.") {
+				if _, ok := pairs[k]; !ok {
+					t.Errorf("%s: params %s = %q, the catalog clears that team for no counterparty", env, k, v)
+				}
+			}
+		}
+		for k, want := range pairs {
+			slices.Sort(want)
+			got := strings.Split(cm.Data[k], ",")
+			slices.Sort(got)
+			if !slices.Equal(got, want) {
+				t.Errorf("%s: params %s = %q, the catalog says %v", env, k, cm.Data[k], want)
+			}
 		}
 	}
 }

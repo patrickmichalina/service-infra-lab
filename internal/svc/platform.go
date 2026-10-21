@@ -51,6 +51,17 @@ type Catalog struct {
 	KMS map[string]struct {
 		KeyID string `yaml:"keyId"`
 	} `yaml:"kms"`
+	Counterparties map[string]Counterparty `yaml:"counterparties"`
+}
+
+// Counterparty is a broker or venue the platform holds a connection agreement with.
+// Its endpoints are fixed addresses that both sides allow-list, so they are literal
+// CIDRs, kept here so that no service repository ever holds them (R5). Teams lists
+// who may connect: a session with a partner is a contract, not a self-service choice.
+type Counterparty struct {
+	CIDRs []string `yaml:"cidrs"`
+	Ports []int    `yaml:"ports"`
+	Teams []string `yaml:"teams"`
 }
 
 // Registration is one entry of platform/registry.yaml.

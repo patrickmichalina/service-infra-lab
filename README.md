@@ -9,7 +9,8 @@
 | Admission, Argo CD project, network baseline and AWS backstops | [`policies/`](policies) |
 | The same, run on real Kubernetes (kind, real ACK / External Secrets / Argo CD), with the transcript | [`tests/cluster/run.sh`](tests/cluster/run.sh), [`docs/evidence/cluster-run.txt`](docs/evidence/cluster-run.txt) |
 | An adversarial pass over all of it, and what changed | [`docs/notes.md`](docs/notes.md#adversarial-pass-and-what-changed-because-of-it) |
-| What I would build instead, and the parts of it proven here | [`docs/design.md` §8](docs/design.md#8-what-i-would-build-instead), [`alternative/`](alternative) |
+| What running a trading venue changes: brokers and venues as catalog entries (built), sessions, rollback, change windows, audit | [`docs/design.md` §6](docs/design.md#6-what-a-trading-venue-changes) |
+| What I would build instead, and the parts of it proven here | [`docs/design.md` §9](docs/design.md#9-what-i-would-build-instead), [`alternative/`](alternative) |
 
 ## Run it
 
@@ -92,14 +93,15 @@ out/                 committed outputs
 A take-home has no AWS account and no production data, so each part is exercised as far as the exercise allows.
 The rest is stated plainly.
 
-- **Kubernetes: on real clusters.** `tests/cluster/run.sh` makes 159 checks on throwaway kind clusters, which it
+- **Kubernetes: on real clusters.** `tests/cluster/run.sh` makes 167 checks on throwaway kind clusters, which it
   deletes afterwards ([transcript](docs/evidence/cluster-run.txt)):
   - every rendered object is applied to a real API server (Kubernetes 1.37), with the real ACK, External Secrets and
     Argo CD CRDs and strict field validation;
-  - all 47 hostile objects are refused, each by the policy meant to refuse it;
+  - all 51 hostile objects are refused, each by the policy meant to refuse it;
   - the ExternalSecrets sync;
   - Argo CD refuses the platform's kinds in team charts;
   - every network rule is checked on a policy-enforcing CNI;
+  - a counterparty rule reaches a stand-in venue gateway only on its port, and only from the cleared team;
   - the alternative design's FQDN egress is checked on Cilium.
 
   The run also caught two bugs that no offline check could see
@@ -107,9 +109,9 @@ The rest is stated plainly.
 - **AWS: from primary sources.** IAM, Pod Identity, S3 endpoint and MSK behaviour are taken from AWS documentation
   and the VPC CNI's source, each cited
   ([notes](docs/notes.md#things-verified-by-documentation-not-by-running-them)). They are the first things to
-  confirm in a real account ([design §7](docs/design.md#7-unknowns-i-would-verify-first)).
+  confirm in a real account ([design §8](docs/design.md#8-unknowns-i-would-verify-first)).
 - **Inputs the brief leaves open** are filled in with labelled stand-ins: catalog ids, load-balancer subnets,
   resource owners, observed usage, topic names and pointer versions
   ([notes](docs/notes.md#things-i-invented-the-brief-gives-none-of-them)).
 - **Scope for day one:** chart introspection, `svcrender import`, inventory checks and the usage collector come
-  next ([design §6](docs/design.md#6-what-i-cut-from-day-one-and-why)).
+  next ([design §7](docs/design.md#7-what-i-cut-from-day-one-and-why)).

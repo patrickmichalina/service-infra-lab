@@ -76,7 +76,8 @@ that teams do not understand their own infrastructure. What they **never** write
 - the SSM env prefix;
 - MSK, RDS and KMS identifiers. They write `msk-cluster:main` and the platform catalog resolves it
   ([`platform/catalog/`](../platform/catalog));
-- the pod selector, and the platform baselines for DNS and the Pod Identity agent.
+- the pod selector, and the platform baselines for DNS and the Pod Identity agent;
+- a broker's or venue's addresses. They write `counterparty: venue-a-fix` (§6).
 
 From that spec `svcrender` renders ([`out/render/stg/odds-ingest/`](../out/render/stg/odds-ingest)) a
 ServiceAccount; an ACK `Role` with the boundary, a trust policy pinned to this cluster, namespace and service account,
@@ -96,7 +97,7 @@ as enforcement, because the service team controls them.
 | **R1** own namespace and project | The registry gives the team, keyed by source repo. A spec that claims another service, or sets `project`, `namespace`, `chart` or `image`, is refused ([`checkR1`](../internal/svc/rules.go)) | The team `AppProject` allows the team namespace only, no cluster kinds, and only an **allow-list** of namespaced kinds, none of them the platform's ([`projects.yaml`](../policies/argocd/projects.yaml)). VAPs refuse any Application in `default` or an unknown project, a team Application outside its namespace, and a team project wider than that ([`application.yaml`](../policies/admission/application.yaml)) | n/a | Yes for the spec. **No for the chart**, which only the AppProject sees |
 | **R2** boundary, no `*`, no IAM/STS/KMS-mgmt | Action and resource checks, case-insensitive as IAM is. **Ownership:** a grant touches only the team's own resources or ones the owner shared. No action that controls who reaches a resource (`s3:PutBucketPolicy`, or `s3:Put*`, which covers it). The boundary is always attached ([`rules.go`](../internal/svc/rules.go), [`ownership.go`](../internal/svc/ownership.go)) | A VAP requires this account's boundary, Pod Identity trust for one namespace and service account, and refuses `*`, service-wide and leading wildcards, `NotAction`, managed policies, JSON escapes and control actions. A Pod Identity association binds only to its own role, with no role chaining ([`iam-role.yaml`](../policies/admission/iam-role.yaml)) | The boundary denies IAM, STS, KMS management and the control actions. The ACK controller can only create `svc-*` roles *with* the boundary, and can never remove or edit it ([`policies/aws/`](../policies/aws)) | Yes |
 | **R3** SSM under `/<env>/<team>/` | Path checked against the registry team; env prefix injected ([`checkR3`](../internal/svc/rules.go)) | The per-namespace `SecretStore` role can only read `/<env>/<team>/*` | The IAM policy of that store role | Yes |
-| **R4** network shape | Rendered from intent: the selector is always this service's pods, `{vpcCidr}` and `{albSubnets}` are filled in, internet is 443-only, names its `hosts:` and excludes the VPC ([`checkR4`](../internal/svc/rules.go)). A platform default-deny covers every pod no service policy selects ([`default-deny.yaml`](../policies/network/default-deny.yaml)) | A VAP covers **every namespace not labelled as a platform namespace**. It allows only: one service's pods, peers that name one namespace, this cluster's exact VPC range or load-balancer subnets, the Pod Identity agent, or internet on 443 that excludes the VPC and records its hosts ([`networkpolicy.yaml`](../policies/admission/networkpolicy.yaml)). The AppProject forbids NetworkPolicy in charts | n/a | Yes |
+| **R4** network shape | Rendered from intent: the selector is always this service's pods, `{vpcCidr}` and `{albSubnets}` are filled in, internet is 443-only, names its `hosts:` and excludes the VPC, and a broker or venue is a catalog `counterparty` the team is cleared for ([`checkR4`](../internal/svc/rules.go)). A platform default-deny covers every pod no service policy selects ([`default-deny.yaml`](../policies/network/default-deny.yaml)) | A VAP covers **every namespace not labelled as a platform namespace**. It allows only: one service's pods, peers that name one namespace, this cluster's exact VPC range or load-balancer subnets, the Pod Identity agent, a counterparty's exact `cidr:port` cleared for that team, or internet on 443 that excludes the VPC and records its hosts ([`networkpolicy.yaml`](../policies/admission/networkpolicy.yaml)). The AppProject forbids NetworkPolicy in charts | n/a | Yes |
 | **R5** no env facts in the repo | Every scalar and every comment in the spec is scanned for account ids, ARNs, IPs, cluster and registry names ([`checkR5`](../internal/svc/rules.go)) | n/a | n/a | **Only for the spec.** The chart and the rest of the repo are out of reach. This is a convention there, not a rule |
 | **R6** live in stg first | Prd is rendered from the Freight's spec commit, never from repo HEAD. Each env's chart and image come only from that env's pointers | n/a | n/a | **No.** It is a fact about time: the soak gate (Part C) decides it |
 | **R7** explicit envs, prd ⇒ stg | Refused at render ([`checkR7`](../internal/svc/rules.go)) | n/a | n/a | Yes |
@@ -110,7 +111,7 @@ Why admission and AWS as well: render is code the platform team writes, and it w
 apply`, a compromised bot or a bad merge into `platform-gitops` never passes through render. The later layers check
 **shape**, not intent, and admission is held to be **at least as strict as render**. An adversarial pass showed it
 was not: it admitted 8 of 11 hostile objects, including `s3:*` on `*` written as JSON escapes
-([notes](notes.md#adversarial-pass-and-what-changed-because-of-it)). Now every rendered object must pass it, and 47
+([notes](notes.md#adversarial-pass-and-what-changed-because-of-it)). Now every rendered object must pass it, and 51
 hostile objects must be refused, each by the policy meant to refuse it. That is checked offline
 (`policies/admission/test.sh`, kyverno) and on a real API server ([`tests/cluster/run.sh`](../tests/cluster/run.sh),
 [evidence](evidence/cluster-run.txt)).
@@ -211,7 +212,52 @@ traffic. That shows up as `degraded` in stg and never reaches prd.
    - NetworkPolicy deny logs are flat;
    - for shared roles, IAM last-used shows no sessions for 30 days before the role is deleted.
 
-## 6. What I cut from day one, and why
+## 6. What a trading venue changes
+
+The brief is generic, but the services are not: rfq-router holds venue credentials, and settlement-writer signs
+settlement reports. Five things follow.
+
+**Brokers and venues are catalog entries (built).** A FIX session runs to fixed addresses, usually over a
+cross-connect or VPN, and both sides allow-list them. So "no literal CIDRs" cannot mean "no addresses": it means none
+in a service repository.
+- A spec writes `- counterparty: venue-a-fix, ports: [9880]`. The catalog holds each environment's endpoints, ports,
+  and the teams cleared to connect, since a session with a partner is a contract, not a self-service choice
+  ([`platform/catalog/`](../platform/catalog), [`checkCounterparties`](../internal/svc/rules.go)).
+- The renderer writes the exact address blocks. Admission accepts a literal address only as a `cidr:port` pair that
+  the parameters clear for that namespace's team ([`networkpolicy.yaml`](../policies/admission/networkpolicy.yaml)).
+- A partner's address written literally is refused, and the fix names its catalog entry.
+- On a real cluster, a stand-in gateway on the venue's range is reached by rfq-router on 9880. It is not reached on
+  another port, or from a team that is not cleared ([evidence](evidence/cluster-run.txt)).
+- The other direction belongs to the platform too: partners allow-list *our* addresses, so session traffic leaves
+  through platform-owned NAT with fixed addresses per environment. Changing them is a change coordinated with the
+  partner, never a spec field.
+
+**Sessions are stateful, so deploys need a shape.** A FIX session is one logon per sender and target identity,
+with sequence numbers that carry across reconnects. Two pods cannot both hold it, and a rolling update mid-session
+forces a reconnect and sequence recovery. Session-holding services run one active instance with a standby, and roll at the venue's session
+boundary. That is the chart's concern, but it is why the next two points matter.
+
+**Rollback never waits for the soak gate.** The gate decides whether *new* Freight is promotable. Going back to the
+Freight that was last healthy in prd is a different act, and as written the gate would BLOCK it, because that Freight
+is no longer live in stg. Rollback should be one step: immediate, audited and paged. It is never gated on stg.
+
+**Change windows.** Outside a rollback, no prd sync during market hours or a settlement run. The gate already takes
+its policy as a value, so a calendar is one more input to it. I have left it unbuilt on purpose.
+
+**An audit trail, without a ticket queue.** Every prd change already has a chain:
+- the spec commit and its author;
+- the bot MR with the rendered diff;
+- the gate's verdict with its reasons;
+- the person who synced.
+
+Keeping the verdict with the promotion gives a partner's or auditor's due diligence ("who changed what, who approved
+it, what was it tested on") an answer for every change. The one rule worth adding is that the person who syncs prd
+is not the spec's author.
+
+On latency: order-path egress uses counterparty entries (addresses, enforced in the kernel), not FQDN rules, which
+add a DNS proxy. Any network policy change on the order path is measured at p99 before and after.
+
+## 7. What I cut from day one, and why
 
 - **Chart introspection** (`helm template` against the AppProject). The AppProject already refuses at sync; this only
   makes the error earlier. It's the first thing to build next.
@@ -222,7 +268,7 @@ traffic. That shows up as `degraded` in stg and never reaches prd.
   Shared-role migration waits on this; nothing else does.
 - **An exceptions workflow, a UI or Backstage, cost reporting, multi-region.**
 
-## 7. Unknowns I would verify first
+## 8. Unknowns I would verify first
 
 Settled since the first draft, by documentation or source, not by an AWS account (sources in
 [notes](notes.md#things-verified-by-documentation-not-by-running-them)):
@@ -240,7 +286,7 @@ Still open:
 - Who owns cross-team SSM values today (rfq-router reads under `state`).
 - The existing role and object names, which migration needs to keep.
 
-## 8. What I would build instead
+## 9. What I would build instead
 
 The design above answers the brief as asked. The adversarial pass says something about the brief itself. Most of the
 holes came from **rules written in the vocabulary of today's files**:
