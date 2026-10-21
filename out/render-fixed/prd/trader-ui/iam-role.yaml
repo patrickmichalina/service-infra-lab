@@ -1,0 +1,71 @@
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:17c3b32b5a4983e1b411b44538eaa038a53ab2daf02f94c4ca7a76f1a8d4142b
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: trader-ui
+    platform.example.org/team: distribution
+  name: svc-distribution-trader-ui
+  namespace: ack-services
+spec:
+  assumeRolePolicyDocument: |-
+    {
+      "Statement": [
+        {
+          "Action": [
+            "sts:AssumeRole",
+            "sts:TagSession"
+          ],
+          "Condition": {
+            "StringEquals": {
+              "aws:RequestTag/eks-cluster-name": "trading-platform-prd",
+              "aws:RequestTag/kubernetes-namespace": "distribution",
+              "aws:RequestTag/kubernetes-service-account": "trader-ui",
+              "aws:SourceAccount": "333333333333"
+            }
+          },
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          }
+        }
+      ],
+      "Version": "2012-10-17"
+    }
+  description: trader-ui (distribution), rendered from its service spec
+  inlinePolicies:
+    service: |-
+      {
+        "Statement": [
+          {
+            "Sid": "Spec0",
+            "Effect": "Allow",
+            "Action": [
+              "s3:GetObject"
+            ],
+            "Resource": [
+              "arn:aws:s3:::trading-platform-prd-ui-assets/*"
+            ]
+          },
+          {
+            "Sid": "Spec1",
+            "Effect": "Allow",
+            "Action": [
+              "kms:Decrypt"
+            ],
+            "Resource": [
+              "arn:aws:kms:us-east-1:333333333333:key/7c8d9e0f-bbbb-4c2d-8e3f-4a5b6c7d8e9f"
+            ]
+          }
+        ],
+        "Version": "2012-10-17"
+      }
+  name: svc-distribution-trader-ui
+  permissionsBoundary: arn:aws:iam::333333333333:policy/service-boundary
+  tags:
+    - key: team
+      value: distribution
+    - key: service
+      value: trader-ui

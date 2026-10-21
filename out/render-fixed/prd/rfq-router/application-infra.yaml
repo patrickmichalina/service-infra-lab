@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:472fad0f8fdd7e00588416ce17b516ff144258ba0e50693c420a5b2895410ea5
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: rfq-router
+    platform.example.org/team: normalization
+  name: rfq-router-infra
+  namespace: argocd
+spec:
+  destination:
+    namespace: normalization
+    server: https://kubernetes.default.svc
+  project: services-infra
+  source:
+    path: rendered/prd/rfq-router
+    repoURL: https://git.example.org/platform-gitops.git
+    targetRevision: main
+  syncPolicy: {}

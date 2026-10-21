@@ -1,0 +1,11 @@
+# Platform-owned named resources. Specs refer to these by name (msk-cluster:main);
+# only this file knows ids. Values are illustrative: the brief gives none.
+region: us-east-1
+endpoints:
+  s3: gateway        # S3 through a VPC gateway endpoint (assumed; the brief does not say)
+msk:
+  main: {name: trading-platform-prd, uuid: 9f8e7d6c-2222-4b3a-9c8d-7e6f5a4b3c2d-p1}
+rds:
+  settlements: {resourceId: db-PRDSETTLEMENTS1A2S3D4F5G6H}
+kms:
+  ui-assets: {keyId: 7c8d9e0f-bbbb-4c2d-8e3f-4a5b6c7d8e9f}

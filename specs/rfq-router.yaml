@@ -1,0 +1,26 @@
+# example-org/rfq-router: platform/service.yaml, as written from request 03, verbatim in intent.
+service: rfq-router
+team: normalization
+project: default            # "the normalization one keeps rejecting our chart's ClusterRole"
+environments: [stg, prd]
+image: trading/rfq-router
+chart: rfq-router
+
+ingress:
+  - ports: []               # "allow all ingress"
+    reason: a few callers, don't want to keep editing this
+
+egress:
+  - cidr: 0.0.0.0/0         # "allow all"
+
+permissions:
+  - actions: ["s3:*"]
+    resources: ["*"]
+  - actions: [kafka-cluster:Connect]
+    resources: ["msk-cluster:main"]
+  - actions: [sts:AssumeRole]
+    resources: ["*"]         # "so it can reach the data account later"
+
+secrets:
+  - key: venue-credentials
+    ssm: /state/rfq-router/venue-credentials

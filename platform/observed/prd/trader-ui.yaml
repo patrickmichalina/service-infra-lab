@@ -1,0 +1,5 @@
+# Stand-in for 30 days of usage data for trader-ui's current role in prd.
+identity: role/trader-ui
+window: 2026-09-08..2026-10-08
+used:
+  - {action: s3:GetObject, resource: "s3-object:trading-platform-{env}-ui-assets/app/index.html"}

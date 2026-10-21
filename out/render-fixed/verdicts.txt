@@ -1,0 +1,15 @@
+== odds-ingest
+   stg  ACCEPT   0 error(s), 7 object(s) -> stg/odds-ingest/
+   prd  ACCEPT   0 error(s), 7 object(s) -> prd/odds-ingest/
+
+== rfq-router
+   stg  ACCEPT   0 error(s), 7 object(s) -> stg/rfq-router/
+   prd  ACCEPT   0 error(s), 7 object(s) -> prd/rfq-router/
+
+== settlement-writer
+   stg  ACCEPT   0 error(s), 7 object(s) -> stg/settlement-writer/
+   prd  ACCEPT   0 error(s), 7 object(s) -> prd/settlement-writer/
+
+== trader-ui
+   stg  ACCEPT   0 error(s), 7 object(s) -> stg/trader-ui/
+   prd  ACCEPT   0 error(s), 7 object(s) -> prd/trader-ui/

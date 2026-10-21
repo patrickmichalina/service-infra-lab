@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:32aca5614b4c72b129545c64d1ff9721b2393009168d995395da45c68b873a78
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: settlement-writer
+    platform.example.org/team: state
+  name: settlement-writer
+  namespace: argocd
+spec:
+  destination:
+    namespace: state
+    server: https://kubernetes.default.svc
+  project: state
+  source:
+    chart: settlement-writer
+    helm:
+      valuesObject:
+        image:
+          repository: 333333333333.dkr.ecr.us-east-1.amazonaws.com/trading/settlement-writer
+          tag: r6
+        serviceAccount:
+          create: false
+          name: settlement-writer
+    repoURL: 111111111111.dkr.ecr.us-east-1.amazonaws.com/charts
+    targetRevision: 2.7.0
+  syncPolicy: {}

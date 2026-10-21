@@ -1,0 +1,125 @@
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:32aca5614b4c72b129545c64d1ff9721b2393009168d995395da45c68b873a78
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: settlement-writer
+    platform.example.org/team: state
+  name: svc-state-settlement-writer
+  namespace: ack-services
+spec:
+  assumeRolePolicyDocument: |-
+    {
+      "Statement": [
+        {
+          "Action": [
+            "sts:AssumeRole",
+            "sts:TagSession"
+          ],
+          "Condition": {
+            "StringEquals": {
+              "aws:RequestTag/eks-cluster-name": "trading-platform-prd",
+              "aws:RequestTag/kubernetes-namespace": "state",
+              "aws:RequestTag/kubernetes-service-account": "settlement-writer",
+              "aws:SourceAccount": "333333333333"
+            }
+          },
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          }
+        }
+      ],
+      "Version": "2012-10-17"
+    }
+  description: settlement-writer (state), rendered from its service spec
+  inlinePolicies:
+    service: |-
+      {
+        "Statement": [
+          {
+            "Sid": "Spec0",
+            "Effect": "Allow",
+            "Action": [
+              "rds-db:connect"
+            ],
+            "Resource": [
+              "arn:aws:rds-db:us-east-1:333333333333:dbuser:db-PRDSETTLEMENTS1A2S3D4F5G6H/settlement_writer"
+            ]
+          },
+          {
+            "Sid": "Spec1",
+            "Effect": "Allow",
+            "Action": [
+              "s3:GetObject",
+              "s3:PutObject"
+            ],
+            "Resource": [
+              "arn:aws:s3:::trading-platform-prd-settlement-reports/*"
+            ]
+          },
+          {
+            "Sid": "Spec2",
+            "Effect": "Allow",
+            "Action": [
+              "s3:ListBucket"
+            ],
+            "Resource": [
+              "arn:aws:s3:::trading-platform-prd-settlement-reports"
+            ]
+          },
+          {
+            "Sid": "Spec3",
+            "Effect": "Allow",
+            "Action": [
+              "kafka-cluster:Connect"
+            ],
+            "Resource": [
+              "arn:aws:kafka:us-east-1:333333333333:cluster/trading-platform-prd/9f8e7d6c-2222-4b3a-9c8d-7e6f5a4b3c2d-p1"
+            ]
+          },
+          {
+            "Sid": "Spec4",
+            "Effect": "Allow",
+            "Action": [
+              "kafka-cluster:DescribeTopic",
+              "kafka-cluster:ReadData"
+            ],
+            "Resource": [
+              "arn:aws:kafka:us-east-1:333333333333:topic/trading-platform-prd/9f8e7d6c-2222-4b3a-9c8d-7e6f5a4b3c2d-p1/settlement-instructions"
+            ]
+          },
+          {
+            "Sid": "Spec5",
+            "Effect": "Allow",
+            "Action": [
+              "kafka-cluster:DescribeGroup",
+              "kafka-cluster:AlterGroup"
+            ],
+            "Resource": [
+              "arn:aws:kafka:us-east-1:333333333333:group/trading-platform-prd/9f8e7d6c-2222-4b3a-9c8d-7e6f5a4b3c2d-p1/settlement-writer"
+            ]
+          },
+          {
+            "Sid": "Spec6",
+            "Effect": "Allow",
+            "Action": [
+              "kafka-cluster:DescribeTopic",
+              "kafka-cluster:WriteData"
+            ],
+            "Resource": [
+              "arn:aws:kafka:us-east-1:333333333333:topic/trading-platform-prd/9f8e7d6c-2222-4b3a-9c8d-7e6f5a4b3c2d-p1/pp-settlement-events"
+            ]
+          }
+        ],
+        "Version": "2012-10-17"
+      }
+  name: svc-state-settlement-writer
+  permissionsBoundary: arn:aws:iam::333333333333:policy/service-boundary
+  tags:
+    - key: team
+      value: state
+    - key: service
+      value: settlement-writer

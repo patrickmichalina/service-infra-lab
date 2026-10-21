@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:17c3b32b5a4983e1b411b44538eaa038a53ab2daf02f94c4ca7a76f1a8d4142b
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: trader-ui
+    platform.example.org/team: distribution
+  name: trader-ui-infra
+  namespace: argocd
+spec:
+  destination:
+    namespace: distribution
+    server: https://kubernetes.default.svc
+  project: services-infra
+  source:
+    path: rendered/prd/trader-ui
+    repoURL: https://git.example.org/platform-gitops.git
+    targetRevision: main
+  syncPolicy: {}

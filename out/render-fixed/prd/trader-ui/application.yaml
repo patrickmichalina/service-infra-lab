@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:17c3b32b5a4983e1b411b44538eaa038a53ab2daf02f94c4ca7a76f1a8d4142b
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: trader-ui
+    platform.example.org/team: distribution
+  name: trader-ui
+  namespace: argocd
+spec:
+  destination:
+    namespace: distribution
+    server: https://kubernetes.default.svc
+  project: distribution
+  source:
+    chart: trader-ui
+    helm:
+      valuesObject:
+        image:
+          repository: 333333333333.dkr.ecr.us-east-1.amazonaws.com/trading/trader-ui
+          tag: r22
+        serviceAccount:
+          create: false
+          name: trader-ui
+    repoURL: 111111111111.dkr.ecr.us-east-1.amazonaws.com/charts
+    targetRevision: 5.1.0
+  syncPolicy: {}

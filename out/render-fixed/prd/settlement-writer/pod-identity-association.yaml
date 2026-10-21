@@ -1,0 +1,16 @@
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:32aca5614b4c72b129545c64d1ff9721b2393009168d995395da45c68b873a78
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: settlement-writer
+    platform.example.org/team: state
+  name: settlement-writer
+  namespace: ack-services
+spec:
+  clusterName: trading-platform-prd
+  namespace: state
+  roleARN: arn:aws:iam::333333333333:role/svc-state-settlement-writer
+  serviceAccount: settlement-writer

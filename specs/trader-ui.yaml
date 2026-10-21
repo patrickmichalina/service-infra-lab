@@ -1,0 +1,26 @@
+# example-org/trader-ui: platform/service.yaml, as written from request 04.
+service: trader-ui
+team: distribution
+environments: [prd]         # "remove the staging deployment"
+image: trading/trader-ui
+chart: trader-ui
+
+ingress:
+  - namespace: kube-system
+    ports: [3000]
+    reason: internal ALB
+
+egress:
+  - cidr: 203.0.113.40/32
+    ports: [443]
+    reason: new auth provider
+
+permissions:
+  - actions: [s3:GetObject]
+    resources: ["s3-object:trading-platform-{env}-ui-assets/*"]
+  - actions: [kms:CreateGrant]
+    resources: ["kms-key:ui-assets"]
+
+secrets:
+  - key: session-key
+    ssm: /distribution/trader-ui/session-key
