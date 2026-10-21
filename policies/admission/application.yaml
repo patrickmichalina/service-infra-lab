@@ -22,7 +22,7 @@ spec:
       expression: "params.data.teams.split(',')"
     - name: project
       expression: "object.spec.?project.orValue('')"
-    - name: namespace
+    - name: destination # not "namespace": that is a reserved word in CEL
       expression: "object.spec.?destination.?namespace.orValue('')"
   validations:
     - expression: "variables.project != 'default' && variables.project != ''"
@@ -31,9 +31,9 @@ spec:
         variables.project in variables.teams || variables.project == 'services-infra' ||
         variables.project in params.data.platformProjects.split(',')
       message: "an Application uses its team's project, services-infra, or a platform project (R1)"
-    - expression: "!(variables.project in variables.teams) || variables.namespace == variables.project"
+    - expression: "!(variables.project in variables.teams) || variables.destination == variables.project"
       message: "a team's Application deploys only into the team's namespace (R1)"
-    - expression: "variables.project != 'services-infra' || variables.namespace in variables.teams || variables.namespace == 'ack-services'"
+    - expression: "variables.project != 'services-infra' || variables.destination in variables.teams || variables.destination == 'ack-services'"
       message: "services-infra deploys only into team namespaces and ack-services (R1)"
 ---
 apiVersion: admissionregistration.k8s.io/v1

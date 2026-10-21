@@ -1,0 +1,4 @@
+# A chart that brings its own service account: the platform renders that one.
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: odds-ingest}

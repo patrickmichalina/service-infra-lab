@@ -138,24 +138,27 @@ func Render(s *Spec, p *Platform, env string, refused map[string]bool) ([]Object
 		}})
 	}
 
-	sync := m{}
-	if cfg.ArgoCD.AutoSync {
-		sync["automated"] = m{"prune": true, "selfHeal": true}
+	// Without auto-sync (prd: a human syncs) there is no syncPolicy at all: an empty one
+	// reaches the API server as null, and the Application CRD refuses it.
+	withSync := func(spec m) m {
+		if cfg.ArgoCD.AutoSync {
+			spec["syncPolicy"] = m{"automated": m{"prune": true, "selfHeal": true}}
+		}
+		return spec
 	}
 	objs = append(objs, Object{"application-infra.yaml", m{
 		"apiVersion": "argoproj.io/v1alpha1", "kind": "Application", "metadata": meta(s.Service+"-infra", argoNamespace),
-		"spec": m{
+		"spec": withSync(m{
 			"project":     infraProject,
 			"destination": m{"server": "https://kubernetes.default.svc", "namespace": ns},
 			"source":      m{"repoURL": gitopsRepo, "targetRevision": "main", "path": fmt.Sprintf("rendered/%s/%s", env, s.Service)},
-			"syncPolicy":  sync,
-		},
+		}),
 	}})
 
 	if ptr := e.Pointers[s.Service]; ptr != nil {
 		objs = append(objs, Object{"application.yaml", m{
 			"apiVersion": "argoproj.io/v1alpha1", "kind": "Application", "metadata": meta(s.Service, argoNamespace),
-			"spec": m{
+			"spec": withSync(m{
 				"project":     cfg.Teams[t].Project,
 				"destination": m{"server": "https://kubernetes.default.svc", "namespace": ns},
 				"source": m{
@@ -167,8 +170,7 @@ func Render(s *Spec, p *Platform, env string, refused map[string]bool) ([]Object
 						"serviceAccount": m{"create": false, "name": s.Service},
 					}},
 				},
-				"syncPolicy": sync,
-			},
+			}),
 		}})
 	} else {
 		notes = append(notes, fmt.Sprintf("no chart Application yet: Kargo has not promoted %s to %s", s.Service, env))

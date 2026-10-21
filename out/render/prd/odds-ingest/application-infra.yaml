@@ -18,4 +18,3 @@ spec:
     path: rendered/prd/odds-ingest
     repoURL: https://git.example.org/platform-gitops.git
     targetRevision: main
-  syncPolicy: {}

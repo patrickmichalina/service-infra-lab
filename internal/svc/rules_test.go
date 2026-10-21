@@ -425,3 +425,15 @@ func object(t *testing.T, r Result, name string) string {
 	t.Fatalf("%s/%s: no %s (verdict %s, findings %v)", r.Env, r.Service, name, r.Verdict, r.Findings)
 	return ""
 }
+
+// stg syncs itself; prd is synced by a human, so its Applications carry no syncPolicy
+// (an empty one reaches the API server as null and the Application CRD refuses it).
+func TestOnlyStgSyncsItself(t *testing.T) {
+	p := platform(t)
+	for env, want := range map[string]bool{"stg": true, "prd": false} {
+		app := object(t, Evaluate(spec(t, base), p, env), "application-infra.yaml")
+		if got := strings.Contains(app, "syncPolicy"); got != want {
+			t.Errorf("%s: syncPolicy present = %v, want %v:\n%s", env, got, want, app)
+		}
+	}
+}

@@ -1,0 +1,24 @@
+# The alternative design's internet egress: by name, not by 0.0.0.0/0. Cilium learns the
+# addresses behind a name from the pod's own DNS answers (hence the DNS rule, which sends
+# lookups through Cilium's DNS proxy), so the rule follows a provider's address changes and
+# admits nothing else on 443. This is what a spec's hosts: list becomes. Tested in
+# tests/cluster/run.sh with example.com standing in for feed.vendor-example.com.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: odds-ingest-egress
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: odds-ingest}
+  egress:
+    - toEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: kube-system, k8s-app: kube-dns}
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]
+          rules:
+            dns: [{matchPattern: "*"}]
+    - toFQDNs:
+        - matchName: example.com
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]

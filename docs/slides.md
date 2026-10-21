@@ -35,7 +35,7 @@ team: ingestion
 environments: [stg, prd]
 ingress:  [{namespace: monitoring, ports: [8080], reason: Prometheus}]
 egress:
-  - {cidr: 0.0.0.0/0, ports: [443], reason: vendor feed}
+  - {cidr: 0.0.0.0/0, ports: [443], hosts: [feed.vendor-example.com], reason: vendor feed}
   - {cidr: "{vpcCidr}", ports: [9098], reason: MSK}
 permissions:
   - {actions: [s3:PutObject], resources: ["s3-object:trading-platform-{env}-odds-snapshots/*"]}
@@ -51,16 +51,17 @@ They never write accounts, ARNs, CIDRs, the boundary, the trust policy, the name
 
 | | Render | Admission | AWS |
 |---|---|---|---|
-| R1 namespace/project | registry keyed by *repo* | AppProject + VAP | – |
-| R2 IAM | action/resource checks | VAP: boundary, no `*` | boundary; controller can't create without it |
+| R1 namespace/project | registry keyed by *repo* | AppProject allow-list + VAP | – |
+| R2 IAM | action/resource checks, **ownership** | VAP: boundary, no `*`, no escapes, no chaining | boundary; controller can't create without it |
 | R3 SSM | path vs team, env injected | store scoped to team | store role |
-| R4 network | rendered from intent | VAP: shape | – |
-| R5 env facts | scan every value | – | – |
+| R4 network | rendered from intent + default-deny | VAP: shape, exact VPC, every namespace | – |
+| R5 env facts | scan every value and comment | – | – |
 | R6 stg first | prd only from the promoted spec | – | – (the **gate** decides) |
 | R7 envs | refused | – | – |
 | R8 used permissions | grants vs **observed usage** | – | usage data source |
 
-Render can say *what to write instead*. The layers after it hold even when render is wrong or bypassed.
+Render can say *what to write instead*. Admission is held to be at least as strict, so it holds when render is wrong
+or bypassed. Proven on a real API server: every rendered object admitted, 47 hostile objects refused.
 
 ---
 
@@ -124,22 +125,51 @@ The tests caught seven deliberate naive mutations.
 
 ---
 
+## I attacked my own solution
+
+- **Renderer:** 9 of 15 hostile specs accepted (another team's bucket, `msk-topic:main/*`, `s3:Put*`, a wildcard
+  acknowledgement...). Fixed by **resource ownership** and exact rules.
+- **Admission:** 8 of 11 hostile objects admitted, among them `s3:*` on `*` written as `"s3:\u002a"`. It was a weaker
+  copy of the renderer. Now stricter than it, and on by default in every namespace.
+- **Gate:** an `"STG"` event dropped silently, same-instant deploys resolved by id order. Now defects that fail
+  closed.
+- **Real cluster:** a CEL policy that kyverno accepted was invalid on the API server (`namespace` is reserved),
+  and every prd Application had `syncPolicy: null`, which the Argo CD CRD refuses. Golden files had both.
+
+Every attack is now a test.
+
+---
+
+## What I would build instead
+
+Rules written in today's vocabulary (CIDRs, engineer-written IAM, minutes in stg) caused most of the holes.
+
+- **Identity is the namespace and service account**, carried into AWS as Pod Identity session tags.
+- **One static ABAC policy** instead of a role per service: nobody writes IAM, and R2 and R3 hold in AWS.
+- **Owners grant access** in their own resource policies.
+- **Infra in the chart** via a library chart, so Kargo promotes (chart, image) and infra soaks with code.
+- **Admission policies are the one rule set**, also run in service CI.
+- **Egress by host name**, proven on Cilium; **R8 at admission** by comparing old and new, proven on a real API
+  server.
+
+The cost is a CNI change and naming conventions. I'd propose it as an amendment to the rules.
+
+---
+
 ## What I cut, and what I don't know
 
 **Cut:**
 - chart introspection;
 - `svcrender import`;
 - the usage collector (R8 reads a file);
-- inventory checks;
-- resource ownership (any team can name any bucket);
+- inventory checks (the registry refuses resources nobody owns);
 - the exceptions UI.
 
-**Would verify first:**
-- the CNI and the Pod Identity agent egress;
+**Would verify first (needs AWS):**
 - S3 gateway vs interface endpoints;
 - MSK ACLs vs IAM auth;
-- the ALB target type;
-- session-tag trust conditions;
+- the ALB target type and real subnets;
 - existing role names.
 
-**Invented inputs:** catalog ids, observed usage, topic names, pointers. All are listed in `docs/notes.md`.
+**Invented inputs:** catalog ids, load-balancer subnets, resource owners, observed usage, topic names, pointers.
+All are listed in `docs/notes.md`.

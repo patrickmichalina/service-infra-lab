@@ -1,0 +1,20 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ShareReportsWithTraderUi",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::222222222222:role/svc-abac"
+      },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::trading-platform-stg-state-settlement-reports/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalTag/kubernetes-namespace": "distribution",
+          "aws:PrincipalTag/kubernetes-service-account": "trader-ui"
+        }
+      }
+    }
+  ]
+}

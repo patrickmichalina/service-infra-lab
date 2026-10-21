@@ -1,0 +1,76 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "OwnTeamParameters",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters"
+      ],
+      "Resource": "arn:aws:ssm:us-east-1:222222222222:parameter/stg/${aws:PrincipalTag/kubernetes-namespace}/*"
+    },
+    {
+      "Sid": "OwnDatabaseUser",
+      "Effect": "Allow",
+      "Action": "rds-db:connect",
+      "Resource": "arn:aws:rds-db:us-east-1:222222222222:dbuser:*/${aws:PrincipalTag/kubernetes-service-account}"
+    },
+    {
+      "Sid": "OwnTeamBuckets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::trading-platform-stg-${aws:PrincipalTag/kubernetes-namespace}-*",
+        "arn:aws:s3:::trading-platform-stg-${aws:PrincipalTag/kubernetes-namespace}-*/*"
+      ]
+    },
+    {
+      "Sid": "SharedCluster",
+      "Effect": "Allow",
+      "Action": [
+        "kafka-cluster:Connect",
+        "kafka-cluster:DescribeCluster",
+        "kafka-cluster:WriteDataIdempotently"
+      ],
+      "Resource": "arn:aws:kafka:us-east-1:222222222222:cluster/trading-platform-stg/*"
+    },
+    {
+      "Sid": "OwnTeamTopics",
+      "Effect": "Allow",
+      "Action": [
+        "kafka-cluster:DescribeTopic",
+        "kafka-cluster:ReadData",
+        "kafka-cluster:WriteData"
+      ],
+      "Resource": "arn:aws:kafka:us-east-1:222222222222:topic/trading-platform-stg/*/${aws:PrincipalTag/kubernetes-namespace}.*"
+    },
+    {
+      "Sid": "OwnConsumerGroups",
+      "Effect": "Allow",
+      "Action": [
+        "kafka-cluster:DescribeGroup",
+        "kafka-cluster:AlterGroup"
+      ],
+      "Resource": "arn:aws:kafka:us-east-1:222222222222:group/trading-platform-stg/*/${aws:PrincipalTag/kubernetes-service-account}*"
+    },
+    {
+      "Sid": "OwnTeamKeys",
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt",
+        "kms:GenerateDataKey"
+      ],
+      "Resource": "arn:aws:kms:us-east-1:222222222222:key/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/team": "${aws:PrincipalTag/kubernetes-namespace}"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+# A team chart that opens its own network: the team project must refuse it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-all}
+spec:
+  podSelector: {}
+  ingress: [{}]

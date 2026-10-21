@@ -56,7 +56,7 @@ environments: [stg, prd]
 ingress:
   - {namespace: monitoring, ports: [8080], reason: Prometheus scrape}
 egress:
-  - {cidr: 0.0.0.0/0, ports: [443], reason: vendor odds feed feed.vendor-example.com}
+  - {cidr: 0.0.0.0/0, ports: [443], hosts: [feed.vendor-example.com], reason: vendor odds feed}
   - {cidr: "{vpcCidr}", ports: [9098], reason: MSK brokers, IAM auth}
 permissions:
   - {actions: [s3:PutObject],  resources: ["s3-object:trading-platform-{env}-odds-snapshots/*"]}
@@ -93,11 +93,11 @@ as enforcement, because the service team controls them.
 
 | Rule | Render (`svcrender`, platform CI) | Admission (cluster) | Cloud (AWS) | Can render decide it? |
 |---|---|---|---|---|
-| **R1** own namespace and project | The registry gives the team, keyed by source repo. A spec that claims another service, or sets `project`, `namespace`, `chart` or `image`, is refused ([`checkR1`](../internal/svc/rules.go)) | The team `AppProject` allows the team namespace only, no cluster kinds, and none of the platform's kinds ([`projects.yaml`](../policies/argocd/projects.yaml)). A VAP refuses team-labelled Applications in another project or namespace ([`application.yaml`](../policies/admission/application.yaml)) | n/a | Yes for the spec. **No for the chart**, which only the AppProject sees |
-| **R2** boundary, no `*`, no IAM/STS/KMS-mgmt | Action and resource checks; the boundary is always attached ([`checkR2`](../internal/svc/rules.go)) | A VAP requires the boundary and Pod Identity trust, and refuses `"*"` and `svc:*` ([`iam-role.yaml`](../policies/admission/iam-role.yaml)) | The boundary denies IAM, STS and KMS management. The ACK controller can only create `svc-*` roles *with* the boundary, and can never remove or edit it ([`policies/aws/`](../policies/aws)) | Yes |
+| **R1** own namespace and project | The registry gives the team, keyed by source repo. A spec that claims another service, or sets `project`, `namespace`, `chart` or `image`, is refused ([`checkR1`](../internal/svc/rules.go)) | The team `AppProject` allows the team namespace only, no cluster kinds, and only an **allow-list** of namespaced kinds, none of them the platform's ([`projects.yaml`](../policies/argocd/projects.yaml)). VAPs refuse any Application in `default` or an unknown project, a team Application outside its namespace, and a team project wider than that ([`application.yaml`](../policies/admission/application.yaml)) | n/a | Yes for the spec. **No for the chart**, which only the AppProject sees |
+| **R2** boundary, no `*`, no IAM/STS/KMS-mgmt | Action and resource checks, case-insensitive as IAM is. **Ownership:** a grant touches only the team's own resources or ones the owner shared. No action that controls who reaches a resource (`s3:PutBucketPolicy`, or `s3:Put*`, which covers it). The boundary is always attached ([`rules.go`](../internal/svc/rules.go), [`ownership.go`](../internal/svc/ownership.go)) | A VAP requires this account's boundary, Pod Identity trust for one namespace and service account, and refuses `*`, service-wide and leading wildcards, `NotAction`, managed policies, JSON escapes and control actions. A Pod Identity association binds only to its own role, with no role chaining ([`iam-role.yaml`](../policies/admission/iam-role.yaml)) | The boundary denies IAM, STS, KMS management and the control actions. The ACK controller can only create `svc-*` roles *with* the boundary, and can never remove or edit it ([`policies/aws/`](../policies/aws)) | Yes |
 | **R3** SSM under `/<env>/<team>/` | Path checked against the registry team; env prefix injected ([`checkR3`](../internal/svc/rules.go)) | The per-namespace `SecretStore` role can only read `/<env>/<team>/*` | The IAM policy of that store role | Yes |
-| **R4** network shape | Rendered from intent: the selector is always this service's pods, `{vpcCidr}` is filled in, internet is 443-only with a reason and excludes the VPC ([`checkR4`](../internal/svc/rules.go)) | A VAP refuses empty selectors, unnamed namespaces, internet on other ports, and literal external CIDRs ([`networkpolicy.yaml`](../policies/admission/networkpolicy.yaml)). The AppProject forbids NetworkPolicy in charts | n/a | Yes |
-| **R5** no env facts in the repo | Every scalar in the spec is scanned for account ids, ARNs, IPs, cluster and registry names ([`checkR5`](../internal/svc/rules.go)) | n/a | n/a | **Only for the spec.** The chart and the rest of the repo are out of reach. This is a convention there, not a rule |
+| **R4** network shape | Rendered from intent: the selector is always this service's pods, `{vpcCidr}` and `{albSubnets}` are filled in, internet is 443-only, names its `hosts:` and excludes the VPC ([`checkR4`](../internal/svc/rules.go)). A platform default-deny covers every pod no service policy selects ([`default-deny.yaml`](../policies/network/default-deny.yaml)) | A VAP covers **every namespace not labelled as a platform namespace**. It allows only: one service's pods, peers that name one namespace, this cluster's exact VPC range or load-balancer subnets, the Pod Identity agent, or internet on 443 that excludes the VPC and records its hosts ([`networkpolicy.yaml`](../policies/admission/networkpolicy.yaml)). The AppProject forbids NetworkPolicy in charts | n/a | Yes |
+| **R5** no env facts in the repo | Every scalar and every comment in the spec is scanned for account ids, ARNs, IPs, cluster and registry names ([`checkR5`](../internal/svc/rules.go)) | n/a | n/a | **Only for the spec.** The chart and the rest of the repo are out of reach. This is a convention there, not a rule |
 | **R6** live in stg first | Prd is rendered from the Freight's spec commit, never from repo HEAD. Each env's chart and image come only from that env's pointers | n/a | n/a | **No.** It is a fact about time: the soak gate (Part C) decides it |
 | **R7** explicit envs, prd ⇒ stg | Refused at render ([`checkR7`](../internal/svc/rules.go)) | n/a | n/a | Yes |
 | **R8** no silent removal of a used permission | The spec's grants are compared with **observed usage** of the pod's current identity. A removal is refused unless re-granted or listed in `acknowledgeRemovals`. A running service with no usage data is flagged ([`checkR8`](../internal/svc/rules.go)) | n/a | IAM last-accessed data, CloudTrail and MSK logs feed the usage file | **Partly.** "Used" is runtime knowledge, so render can only be as good as the usage data |
@@ -107,9 +107,13 @@ finding carries a rule, a path in the spec, the problem and an exact fix (see
 [`out/render/verdicts.txt`](../out/render/verdicts.txt)).
 
 Why admission and AWS as well: render is code the platform team writes, and it will have bugs. A hand `kubectl
-apply` or a chart smuggling a `NetworkPolicy` never passes through render. The later layers check **shape**, not
-intent. That is why they can be small, and why each one is tested against every object the renderer emits
-(`policies/admission/test.sh` runs them offline).
+apply`, a compromised bot or a bad merge into `platform-gitops` never passes through render. The later layers check
+**shape**, not intent, and admission is held to be **at least as strict as render**. An adversarial pass showed it
+was not: it admitted 8 of 11 hostile objects, including `s3:*` on `*` written as JSON escapes
+([notes](notes.md#adversarial-pass-and-what-changed-because-of-it)). Now every rendered object must pass it, and 47
+hostile objects must be refused, each by the policy meant to refuse it. That is checked offline
+(`policies/admission/test.sh`, kyverno) and on a real API server ([`tests/cluster/run.sh`](../tests/cluster/run.sh),
+[evidence](evidence/cluster-run.txt)).
 
 ## 3. How a change travels
 
@@ -211,22 +215,63 @@ traffic. That shows up as `degraded` in stg and never reaches prd.
 - **Chart introspection** (`helm template` against the AppProject). The AppProject already refuses at sync; this only
   makes the error earlier. It's the first thing to build next.
 - **`svcrender import`.** Migration can start by hand.
-- **Inventory checks** (does the bucket, parameter or catalog entry exist?). Promotion catches these through
-  `degraded`.
+- **Inventory checks** (does the bucket or parameter exist?). The registry already refuses a resource nobody is
+  recorded as owning. Promotion catches the rest through `degraded`.
 - **A usage collector.** R8 reads a file, and the collector is a pipeline from CloudTrail, IAM and MSK logs to it.
   Shared-role migration waits on this; nothing else does.
 - **An exceptions workflow, a UI or Backstage, cost reporting, multi-region.**
-- **Resource ownership.** Any team can name any bucket today. A complete version tags buckets with an owner team and
-  refuses grants to other teams' resources unless the owner lists the grantee.
 
 ## 7. Unknowns I would verify first
 
-- The CNI and NetworkPolicy engine. Does default-deny egress need the Pod Identity agent baseline (`169.254.170.23`)?
+Settled since the first draft, by documentation or source, not by an AWS account (sources in
+[notes](notes.md#things-verified-by-documentation-not-by-running-them)):
+- The VPC CNI's policy agent matches `ipBlock` by address, so pods inside `{vpcCidr}` match. Hence `{albSubnets}`
+  and the default-deny baseline.
+- The agent auto-allows only the node's own address, so the Pod Identity baseline (`169.254.170.23:80`) is needed.
+- Pod Identity session tags can be conditioned on in the trust policy.
+
+Still open:
 - Whether S3 and STS use gateway or interface endpoints. This flips the S3 warning.
 - How MSK ACLs and IAM auth interact on the existing clusters.
-- The ALB target type. With the VPC CNI, pod IPs are VPC addresses, so `{vpcCidr}` ingress for the ALB (fixed
-  trader-ui) also admits pods. A platform token for the load-balancer subnets would be tighter.
-- Whether Pod Identity session tags (`kubernetes-namespace`, `kubernetes-service-account`) can be conditioned on in
-  the trust policy as rendered.
+- The ALB target type, and the real internal load-balancer subnets. `{albSubnets}` assumes IP targets; with
+  instance targets, traffic arrives from node addresses.
+- Who owns which bucket and topic. The owners in the registry are invented.
 - Who owns cross-team SSM values today (rfq-router reads under `state`).
 - The existing role and object names, which migration needs to keep.
+
+## 8. What I would build instead
+
+The design above answers the brief as asked. The adversarial pass says something about the brief itself. Most of the
+holes came from **rules written in the vocabulary of today's files**:
+- R2 limits how wide a grant is, but not whose resource it is on.
+- R4 speaks in CIDRs, which on the VPC CNI also mean pods.
+- R6 counts minutes in an environment that request 04 says "costs money and nobody uses it".
+
+Every rule I enforce before the cluster is convenience. Only the chokepoints a team cannot route around hold, and
+they hold best when the rule is stated **once, there**.
+
+| Concern | Here | Instead |
+|---|---|---|
+| Who a service is | Registry entry keyed by repository | The namespace and service account. Pod Identity puts both in every AWS session as tags |
+| IAM | A rendered role per service, an engineer-written policy | **One static policy for every service role, keyed on those tags** ([`service-abac-policy.stg.json`](../alternative/iam/service-abac-policy.stg.json)): own team's parameters, buckets, topics and keys; own database user and consumer groups. Nobody writes IAM, and R2 and R3 hold in AWS itself |
+| Cross-team access | Owner shares in the registry | The owner's own resource policy names the consumer ([`owner-share-bucket-policy.stg.json`](../alternative/iam/owner-share-bucket-policy.stg.json)) |
+| Infra intent | A spec, rendered by platform CI, via bot MR | A small values block in the service's own chart, rendered by a platform **library chart**. A Freight is then (chart, image), what Kargo already promotes, so infra soaks with the code |
+| Rules | Go, CEL and IAM, three copies | **The admission policies are the rule set.** Service CI runs them offline (kyverno) for feedback; the cluster enforces the same file |
+| Internet egress | `0.0.0.0/0:443` plus a host list | **By name** ([`fqdn-egress.yaml`](../alternative/network/fqdn-egress.yaml)): the named host on 443, nothing else |
+| R8 | Usage data compared with the spec | An update that drops a rule or an action is refused unless it says why ([`acknowledge-removal.yaml`](../alternative/admission/acknowledge-removal.yaml)), plus Access Analyzer's unused-access findings |
+| R6 | Wall-clock soak in a quiet stg | The soak gate as one input to a Kargo verification on real signals (error rate, latency, a synthetic check), then a canary in prd |
+| ECR | One rendered repository per service | Create-on-push from a repository template, and replication instead of a prd cache of stg |
+
+**What is proven here.**
+- On real clusters ([`tests/cluster/run.sh`](../tests/cluster/run.sh)):
+  - the R8 admission policy refuses an unacknowledged removal and admits the acknowledged one;
+  - an FQDN policy on Cilium reaches the named host and nothing else on 443.
+- **Not executed:** the ABAC policy (no AWS account here). Each of its mechanisms is documented
+  ([`alternative/README.md`](../alternative/README.md)).
+
+**What it costs.**
+- Cilium (or an egress proxy) is a dataplane change on two clusters, the largest risk. Do ABAC and admission first.
+- ABAC needs naming conventions (team-prefixed buckets and topics, `team`-tagged keys, database users named after
+  service accounts). Renaming buckets is migration work.
+- Policy errors in CEL are terser than the renderer's fixes, so every validation needs a message that names the fix.
+- It changes the rules: "engineers write IAM" goes away. I would propose that as an amendment, not assume it.

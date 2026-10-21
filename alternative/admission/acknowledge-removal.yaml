@@ -1,0 +1,51 @@
+# R8 at admission, from the alternative design (docs/design.md §8): removing access is
+# refused unless the change says it means it. It compares the object being replaced with
+# the new one, so it needs no usage data and no renderer: a NetworkPolicy update that
+# drops a rule, or a role update that drops an action, must carry the annotation
+# platform.example.org/acknowledge-removal with a reason. Review sees the annotation.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: acknowledge-removal
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["networkpolicies"]
+      - apiGroups: ["iam.services.k8s.aws"]
+        apiVersions: ["*"]
+        operations: ["UPDATE"]
+        resources: ["roles"]
+  variables:
+    - name: acknowledged
+      expression: "object.metadata.?annotations.orValue({})[?'platform.example.org/acknowledge-removal'].orValue('').size() >= 10"
+    - name: rulesRemoved
+      expression: >-
+        object.kind == 'NetworkPolicy' && (
+          oldObject.spec.?ingress.orValue([]).exists(r, !(r in object.spec.?ingress.orValue([]))) ||
+          oldObject.spec.?egress.orValue([]).exists(r, !(r in object.spec.?egress.orValue([]))))
+    - name: oldActions
+      expression: >-
+        object.kind == 'Role' ?
+          oldObject.spec.?inlinePolicies.orValue({}).map(k, oldObject.spec.inlinePolicies[k].findAll(r'"[A-Za-z0-9-]+:[A-Za-z0-9*?]+"')) : []
+    - name: newPolicies
+      expression: "object.kind == 'Role' ? object.spec.?inlinePolicies.orValue({}).map(k, object.spec.inlinePolicies[k]) : []"
+  validations:
+    - expression: "!variables.rulesRemoved || variables.acknowledged"
+      messageExpression: >-
+        'this update removes a network rule ' + object.metadata.name + ' uses today; if that is intended, say why in the platform.example.org/acknowledge-removal annotation (R8)'
+    - expression: >-
+        variables.acknowledged || variables.oldActions.all(actions, actions.all(a, variables.newPolicies.exists(p, p.contains(a))))
+      messageExpression: >-
+        'this update removes an action from role ' + object.spec.name + '; if that is intended, say why in the platform.example.org/acknowledge-removal annotation (R8)'
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: acknowledge-removal
+spec:
+  policyName: acknowledge-removal
+  validationActions: [Deny]
