@@ -21,7 +21,7 @@ type Finding struct {
 	Rule     string // R1..R8, or SCHEMA / REF / NET for checks that are not a rule
 	Severity Severity
 	Envs     []string // environments it holds in; empty: every environment
-	Path     string // location in the spec, e.g. permissions[0].actions[0]
+	Path     string   // location in the spec, e.g. permissions[0].actions[0]
 	Problem  string
 	Fix      string
 }

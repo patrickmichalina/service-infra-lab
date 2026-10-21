@@ -40,7 +40,7 @@ type Catalog struct {
 	Endpoints struct {
 		S3 string `yaml:"s3"` // "gateway" or "interface"
 	} `yaml:"endpoints"`
-	MSK    map[string]struct {
+	MSK map[string]struct {
 		Name string `yaml:"name"`
 		UUID string `yaml:"uuid"`
 	} `yaml:"msk"`
