@@ -1,0 +1,7 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+namespaceSelector:
+  - {name: ingestion, labels: {platform.example.org/team-namespace: "true"}}
+  - {name: state, labels: {platform.example.org/team-namespace: "true"}}
+  - {name: normalization, labels: {platform.example.org/team-namespace: "true"}}
+  - {name: distribution, labels: {platform.example.org/team-namespace: "true"}}

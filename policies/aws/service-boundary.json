@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowWhatTheRolePolicyGrants",
+      "Effect": "Allow",
+      "Action": "*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "NeverIdentityOrKeyManagement",
+      "Effect": "Deny",
+      "Action": [
+        "iam:*",
+        "sts:*",
+        "organizations:*",
+        "kms:CreateKey", "kms:CreateGrant", "kms:RetireGrant", "kms:RevokeGrant", "kms:PutKeyPolicy",
+        "kms:ScheduleKeyDeletion", "kms:CancelKeyDeletion", "kms:DisableKey", "kms:EnableKey",
+        "kms:CreateAlias", "kms:DeleteAlias", "kms:UpdateAlias", "kms:UpdateKeyDescription",
+        "kms:EnableKeyRotation", "kms:DisableKeyRotation", "kms:RotateKeyOnDemand",
+        "kms:ImportKeyMaterial", "kms:DeleteImportedKeyMaterial", "kms:TagResource", "kms:UntagResource",
+        "kms:ReplicateKey", "kms:UpdatePrimaryRegion"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

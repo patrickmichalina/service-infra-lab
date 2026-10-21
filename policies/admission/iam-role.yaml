@@ -1,0 +1,25 @@
+# Backstop for R2 at admission: an ACK Role the platform applies must carry the
+# permissions boundary and be assumable only by EKS Pod Identity. The same
+# condition is enforced again by AWS itself (policies/aws/), which holds even if
+# this cluster is bypassed entirely.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: service-iam-role
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["iam.services.k8s.aws"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["roles"]
+  validations:
+    - expression: "object.spec.?permissionsBoundary.orValue('').endsWith(':policy/service-boundary')"
+      message: "a service role must carry the service-boundary permissions boundary (R2)"
+    - expression: "object.spec.assumeRolePolicyDocument.contains('pods.eks.amazonaws.com')"
+      message: "a service role is assumable only through EKS Pod Identity (R2)"
+    - expression: >-
+        !object.spec.?inlinePolicies.orValue({}).exists(k,
+        object.spec.inlinePolicies[k].matches(r'"\*"') || object.spec.inlinePolicies[k].matches(r'"[a-z0-9-]+:\*"'))
+      message: "an inline policy may not use \"*\" or a service-wide wildcard such as s3:* (R2)"

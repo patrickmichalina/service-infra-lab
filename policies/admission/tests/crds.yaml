@@ -1,0 +1,52 @@
+# Minimal CRD stubs so the offline kyverno CLI can map these kinds; schemas are open.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata: {name: roles.iam.services.k8s.aws}
+spec:
+  group: iam.services.k8s.aws
+  names: {kind: Role, plural: roles, singular: role, listKind: RoleList}
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema: {openAPIV3Schema: {type: object, x-kubernetes-preserve-unknown-fields: true}}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata: {name: applications.argoproj.io}
+spec:
+  group: argoproj.io
+  names: {kind: Application, plural: applications, singular: application, listKind: ApplicationList}
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema: {openAPIV3Schema: {type: object, x-kubernetes-preserve-unknown-fields: true}}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata: {name: externalsecrets.external-secrets.io}
+spec:
+  group: external-secrets.io
+  names: {kind: ExternalSecret, plural: externalsecrets, singular: externalsecret, listKind: ExternalSecretList}
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema: {openAPIV3Schema: {type: object, x-kubernetes-preserve-unknown-fields: true}}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata: {name: podidentityassociations.eks.services.k8s.aws}
+spec:
+  group: eks.services.k8s.aws
+  names: {kind: PodIdentityAssociation, plural: podidentityassociations, singular: podidentityassociation, listKind: PodIdentityAssociationList}
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema: {openAPIV3Schema: {type: object, x-kubernetes-preserve-unknown-fields: true}}

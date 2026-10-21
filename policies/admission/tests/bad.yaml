@@ -1,0 +1,70 @@
+# Objects that must be refused at admission, whoever applies them.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: np-empty-selector, namespace: normalization}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress: [{}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: np-any-namespace, namespace: normalization}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: rfq-router}}
+  ingress:
+    - from: [{namespaceSelector: {}}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: np-internet-all-ports, namespace: normalization}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: rfq-router}}
+  egress:
+    - to: [{ipBlock: {cidr: 0.0.0.0/0}}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: np-literal-external, namespace: distribution}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: trader-ui}}
+  egress:
+    - to: [{ipBlock: {cidr: 203.0.113.40/32}}]
+      ports: [{port: 443, protocol: TCP}]
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: role-no-boundary, namespace: ack-services}
+spec:
+  name: role-no-boundary
+  assumeRolePolicyDocument: '{"Statement":[{"Principal":{"Service":"pods.eks.amazonaws.com"}}]}'
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata: {name: role-star, namespace: ack-services}
+spec:
+  name: role-star
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  assumeRolePolicyDocument: '{"Statement":[{"Principal":{"Service":"pods.eks.amazonaws.com"}}]}'
+  inlinePolicies:
+    service: '{"Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":["*"]}]}'
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-default-project
+  namespace: argocd
+  labels: {platform.example.org/team: normalization}
+spec:
+  project: default
+  destination: {server: https://kubernetes.default.svc, namespace: normalization}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-other-namespace
+  namespace: argocd
+  labels: {platform.example.org/team: normalization}
+spec:
+  project: normalization
+  destination: {server: https://kubernetes.default.svc, namespace: state}

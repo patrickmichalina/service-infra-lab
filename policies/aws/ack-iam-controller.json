@@ -1,0 +1,36 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CreateServiceRolesOnlyWithTheBoundary",
+      "Effect": "Allow",
+      "Action": ["iam:CreateRole", "iam:PutRolePermissionsBoundary"],
+      "Resource": "arn:aws:iam::*:role/svc-*",
+      "Condition": {
+        "StringEquals": {"iam:PermissionsBoundary": "arn:aws:iam::${aws:PrincipalAccount}:policy/service-boundary"}
+      }
+    },
+    {
+      "Sid": "ManageServiceRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole", "iam:UpdateRole", "iam:DeleteRole", "iam:TagRole", "iam:UntagRole",
+        "iam:UpdateAssumeRolePolicy", "iam:PutRolePolicy", "iam:GetRolePolicy",
+        "iam:DeleteRolePolicy", "iam:ListRolePolicies", "iam:ListAttachedRolePolicies"
+      ],
+      "Resource": "arn:aws:iam::*:role/svc-*"
+    },
+    {
+      "Sid": "NeverRemoveTheBoundaryOrAttachManagedPolicies",
+      "Effect": "Deny",
+      "Action": ["iam:DeleteRolePermissionsBoundary", "iam:AttachRolePolicy"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NeverChangeTheBoundaryItself",
+      "Effect": "Deny",
+      "Action": ["iam:CreatePolicyVersion", "iam:DeletePolicy", "iam:DeletePolicyVersion", "iam:SetDefaultPolicyVersion"],
+      "Resource": "arn:aws:iam::*:policy/service-boundary"
+    }
+  ]
+}

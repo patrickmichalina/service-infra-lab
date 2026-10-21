@@ -1,0 +1,37 @@
+# Backstop for R4 at admission. The renderer already produces only policies like
+# this; this refuses anything else that reaches a team namespace (a chart that
+# slipped past the Argo CD project, a hand apply). It holds without env facts:
+# the renderer owns the exact VPC range, admission owns the shape.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: service-networkpolicy
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        platform.example.org/team-namespace: "true"
+    resourceRules:
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["networkpolicies"]
+  variables:
+    - name: peersIn
+      expression: "object.spec.?ingress.orValue([]).map(r, r.?from.orValue([])).flatten()"
+    - name: egress
+      expression: "object.spec.?egress.orValue([])"
+  validations:
+    - expression: "object.spec.podSelector.?matchLabels.orValue({}).exists(k, k == 'app.kubernetes.io/name')"
+      message: "a NetworkPolicy in a team namespace must select one service's pods by app.kubernetes.io/name; an empty podSelector widens the whole namespace (R4)"
+    - expression: "variables.peersIn.all(p, !has(p.namespaceSelector) || p.namespaceSelector.?matchLabels.orValue({}).exists(k, k == 'kubernetes.io/metadata.name'))"
+      message: "ingress from another namespace must name it with kubernetes.io/metadata.name (R4)"
+    - expression: >-
+        variables.egress.all(r, r.?to.orValue([]).all(p, !has(p.ipBlock) || p.ipBlock.cidr != '0.0.0.0/0' ||
+        (size(p.ipBlock.?except.orValue([])) > 0 && r.?ports.orValue([]).size() == 1 && r.ports[0].port == 443)))
+      message: "egress to 0.0.0.0/0 is allowed only on port 443 and must exclude the VPC (R4)"
+    - expression: >-
+        variables.egress.all(r, r.?to.orValue([]).all(p, !has(p.ipBlock) ||
+        p.ipBlock.cidr == '0.0.0.0/0' || p.ipBlock.cidr.startsWith('10.') || p.ipBlock.cidr == '169.254.170.23/32'))
+      message: "egress to a literal address outside the VPC is not allowed; use 0.0.0.0/0 on 443 (R4)"
