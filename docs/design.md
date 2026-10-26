@@ -24,11 +24,11 @@ flowchart LR
   end
   subgraph pg["platform-gitops (trusted)"]
     reg["teams/&lt;team&gt;/services.yaml<br/>(team leads own)"]
-    cat[catalog + platform-config<br/>(platform owns)]
+    cat["catalog + platform-config<br/>(platform owns)"]
     ptr[Kargo pointers]
-    out[rendered/&lt;env&gt;/&lt;svc&gt;/]
+    out["rendered/&lt;env&gt;/&lt;svc&gt;/"]
   end
-  spec -->|CI reads at a commit| R[svcrender<br/>check + render]
+  spec -->|CI reads at a commit| R["svcrender<br/>check + render"]
   reg --> R
   cat --> R
   ptr --> R
@@ -132,11 +132,11 @@ sequenceDiagram
   WH->>WH: Freight F = (spec@C, chart v, image t)
   WH->>CI: promote F to stg
   CI->>CI: svcrender stg with spec@C + pointers(F)
-  CI->>Stg: bot MR, auto-merge on ACCEPT; Argo syncs
+  CI->>Stg: bot MR, auto-merge on ACCEPT, Argo syncs
   Stg-->>Gate: deployed / degraded / recovered events for F
   Gate->>WH: F PROMOTABLE (or WAIT until T / BLOCKED because ...)
   WH->>CI: promote F to prd
-  CI->>Prd: svcrender prd with the same spec@C; MR merged
+  CI->>Prd: svcrender prd with the same spec@C, MR merged
   Prd->>Prd: human presses sync
 ```
 
