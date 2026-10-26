@@ -1,0 +1,16 @@
+# Stand-in for 30 days of IAM last-accessed data, CloudTrail and MSK audit logs for the
+# pod's CURRENT identity: the shared role data-services, sessions tagged
+# kubernetes-namespace=state, kubernetes-service-account=settlement-writer.
+# Topic and group names other than pp-settlement-events are assumptions.
+identity: role/data-services (shared)
+window: 2026-09-08..2026-10-08
+used:
+  - {action: kafka-cluster:Connect,        resource: "msk-cluster:main"}
+  - {action: kafka-cluster:DescribeTopic,  resource: "msk-topic:main/settlement-instructions"}
+  - {action: kafka-cluster:ReadData,       resource: "msk-topic:main/settlement-instructions"}
+  - {action: kafka-cluster:DescribeGroup,  resource: "msk-group:main/settlement-writer"}
+  - {action: kafka-cluster:AlterGroup,     resource: "msk-group:main/settlement-writer"}
+  - {action: kafka-cluster:DescribeTopic,  resource: "msk-topic:main/pp-settlement-events"}
+  - {action: kafka-cluster:WriteData,      resource: "msk-topic:main/pp-settlement-events"}
+  - {action: rds-db:connect,               resource: "rds-dbuser:settlements/settlement_writer"}
+  - {action: s3:PutObject,                 resource: "s3-object:trading-platform-{env}-settlement-reports/daily/2026-10-07.csv"}

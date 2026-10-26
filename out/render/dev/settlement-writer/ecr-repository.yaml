@@ -1,0 +1,13 @@
+apiVersion: ecr.services.k8s.aws/v1alpha1
+kind: Repository
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: settlement-writer
+  name: trading-settlement-writer
+  namespace: ack-services
+spec:
+  imageScanningConfiguration:
+    scanOnPush: true
+  imageTagMutability: IMMUTABLE
+  name: trading/settlement-writer

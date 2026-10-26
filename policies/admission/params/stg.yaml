@@ -1,0 +1,17 @@
+# Per-cluster facts the admission policies compare against, from
+# inputs/platform-config/stg.yaml and platform/catalog/stg.yaml (a test keeps them in step). Platform-owned:
+# kube-system is a platform namespace, so no team can write this object.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-admission
+  namespace: kube-system
+data:
+  env: stg
+  awsAccountId: "222222222222"
+  vpcCidr: 10.20.0.0/16
+  albSubnets: 10.20.240.0/24,10.20.241.0/24
+  # counterparties.<team>: the cidr:port pairs that team may reach, from the catalog
+  counterparties.normalization: 198.51.100.16/28:9880
+  teams: ingestion,state,normalization,distribution   # each team's namespace and project share its name
+  platformProjects: platform

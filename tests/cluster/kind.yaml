@@ -1,0 +1,11 @@
+# The main test cluster. Pods get addresses from the stg VPC range, as they do on EKS with
+# the VPC CNI, so the rendered stg objects apply unchanged and {vpcCidr} covers the pods.
+# kindnet enforces NetworkPolicy by IP address, as the VPC CNI's policy agent does.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: infra-lab
+networking:
+  podSubnet: 10.20.0.0/16
+  serviceSubnet: 10.96.0.0/16
+nodes:
+  - role: control-plane

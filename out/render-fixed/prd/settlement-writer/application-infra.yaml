@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:bccc0342aa1a5459bef2dabe71c509dd750f19ba290d5a866a74b8279e5f7928
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: settlement-writer
+    platform.example.org/team: state
+  name: settlement-writer-infra
+  namespace: argocd
+spec:
+  destination:
+    namespace: state
+    server: https://kubernetes.default.svc
+  project: services-infra
+  source:
+    path: rendered/prd/settlement-writer
+    repoURL: https://git.example.org/platform-gitops.git
+    targetRevision: main

@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:38972aa71c195accc5a86faa167f16dc4498542ef764ac68785d3381fdf9aeaf
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: odds-ingest
+    platform.example.org/team: ingestion
+  name: odds-ingest-infra
+  namespace: argocd
+spec:
+  destination:
+    namespace: ingestion
+    server: https://kubernetes.default.svc
+  project: services-infra
+  source:
+    path: rendered/prd/odds-ingest
+    repoURL: https://git.example.org/platform-gitops.git
+    targetRevision: main

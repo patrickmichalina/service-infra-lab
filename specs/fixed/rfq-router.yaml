@@ -1,0 +1,41 @@
+# example-org/rfq-router after reading the verdict. The chart's ClusterRole became a Role;
+# buckets and callers are named (the names here are illustrative: the request gave none);
+# the data-account access went to the platform team as a separate request; the state team
+# copied the venue credentials to /<env>/normalization/rfq-router/. The venue it routes to
+# is the catalog's venue-a-fix (also illustrative): "allow all" egress becomes the
+# partner's own endpoints, without any address in this repository.
+service: rfq-router
+team: normalization
+environments: [stg, prd]
+
+ingress:
+  - namespace: normalization
+    ports: [8080]
+    reason: book builders and enrichers in our namespace send RFQs
+  - namespace: monitoring
+    ports: [8080]
+    reason: Prometheus scrape
+
+egress:
+  - cidr: "{vpcCidr}"
+    ports: [9098]
+    reason: MSK brokers, IAM auth
+  - cidr: 0.0.0.0/0
+    ports: [443]
+    hosts: [aws:s3]
+    reason: S3 through the VPC gateway endpoint
+  - counterparty: venue-a-fix
+    ports: [9880]
+    reason: FIX session to venue A, with the venue credentials below
+
+permissions:
+  - actions: [s3:GetObject, s3:PutObject]
+    resources: ["s3-object:trading-platform-{env}-rfq-audit/*"]
+  - actions: [kafka-cluster:Connect]
+    resources: ["msk-cluster:main"]
+  - actions: [kafka-cluster:DescribeTopic, kafka-cluster:ReadData, kafka-cluster:WriteData]
+    resources: ["msk-topic:main/rfq.*"]
+
+secrets:
+  - key: venue-credentials
+    ssm: /normalization/rfq-router/venue-credentials

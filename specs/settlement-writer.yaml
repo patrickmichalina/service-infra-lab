@@ -1,0 +1,42 @@
+# example-org/settlement-writer: platform/service.yaml, as written from request 02.
+# Moves off the shared data-services role. "Kafka as before" is written as the reads the
+# team knows about; the request does not mention the write to pp-settlement-events.
+service: settlement-writer
+team: state
+environments: [stg, prd]
+
+ingress:
+  - namespace: monitoring
+    ports: [8080]
+    reason: Prometheus scrape
+  - namespace: distribution
+    ports: [9090]
+    reason: trader-ui calls the report endpoint
+
+egress:
+  - cidr: "{vpcCidr}"
+    ports: [5432]
+    reason: settlements RDS instance
+  - cidr: "{vpcCidr}"
+    ports: [9098]
+    reason: MSK brokers, IAM auth
+
+permissions:
+  - actions: [rds-db:connect]
+    resources: ["rds-dbuser:settlements/settlement_writer"]
+  - actions: [s3:GetObject, s3:PutObject]
+    resources: ["s3-object:trading-platform-{env}-settlement-reports/*"]
+  - actions: [s3:ListBucket]
+    resources: ["s3-bucket:trading-platform-{env}-settlement-reports"]
+  - actions: [kafka-cluster:Connect]
+    resources: ["msk-cluster:main"]
+  - actions: [kafka-cluster:DescribeTopic, kafka-cluster:ReadData]
+    resources: ["msk-topic:main/settlement-instructions"]
+  - actions: [kafka-cluster:DescribeGroup, kafka-cluster:AlterGroup]
+    resources: ["msk-group:main/settlement-writer"]
+
+secrets:
+  - key: db-password
+    ssm: /state/settlement-writer/db-password
+  - key: report-signing-key
+    ssm: /state/settlement-writer/report-signing-key

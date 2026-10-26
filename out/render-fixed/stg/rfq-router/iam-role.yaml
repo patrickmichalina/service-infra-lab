@@ -1,0 +1,84 @@
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:e0bf3756405422a0f4eef80e13ad9d0becc4a30ae293f7dfdcf9100d75f4f3b4
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: rfq-router
+    platform.example.org/team: normalization
+  name: svc-normalization-rfq-router
+  namespace: ack-services
+spec:
+  assumeRolePolicyDocument: |-
+    {
+      "Statement": [
+        {
+          "Action": [
+            "sts:AssumeRole",
+            "sts:TagSession"
+          ],
+          "Condition": {
+            "StringEquals": {
+              "aws:RequestTag/eks-cluster-name": "trading-platform-stg",
+              "aws:RequestTag/kubernetes-namespace": "normalization",
+              "aws:RequestTag/kubernetes-service-account": "rfq-router",
+              "aws:SourceAccount": "222222222222"
+            }
+          },
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          }
+        }
+      ],
+      "Version": "2012-10-17"
+    }
+  description: rfq-router (normalization), rendered from its service spec
+  inlinePolicies:
+    service: |-
+      {
+        "Statement": [
+          {
+            "Sid": "Spec0",
+            "Effect": "Allow",
+            "Action": [
+              "s3:GetObject",
+              "s3:PutObject"
+            ],
+            "Resource": [
+              "arn:aws:s3:::trading-platform-stg-rfq-audit/*"
+            ]
+          },
+          {
+            "Sid": "Spec1",
+            "Effect": "Allow",
+            "Action": [
+              "kafka-cluster:Connect"
+            ],
+            "Resource": [
+              "arn:aws:kafka:us-east-1:222222222222:cluster/trading-platform-stg/0a1b2c3d-1111-4a5b-8c9d-0e1f2a3b4c5d-s1"
+            ]
+          },
+          {
+            "Sid": "Spec2",
+            "Effect": "Allow",
+            "Action": [
+              "kafka-cluster:DescribeTopic",
+              "kafka-cluster:ReadData",
+              "kafka-cluster:WriteData"
+            ],
+            "Resource": [
+              "arn:aws:kafka:us-east-1:222222222222:topic/trading-platform-stg/0a1b2c3d-1111-4a5b-8c9d-0e1f2a3b4c5d-s1/rfq.*"
+            ]
+          }
+        ],
+        "Version": "2012-10-17"
+      }
+  name: svc-normalization-rfq-router
+  permissionsBoundary: arn:aws:iam::222222222222:policy/service-boundary
+  tags:
+    - key: team
+      value: normalization
+    - key: service
+      value: rfq-router

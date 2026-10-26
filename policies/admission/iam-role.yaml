@@ -1,0 +1,119 @@
+# R2 at admission, for every ACK IAM Role and Pod Identity association. AWS holds the
+# boundary itself (policies/aws/); this refuses a role that would be legal for AWS but
+# breaks R2, whoever applies it.
+#
+# CEL cannot parse JSON, so the policy documents are checked as text. That is sound only
+# because a backslash is refused first: without escapes, every JSON string is exactly
+# the characters between two quotes, so "*" cannot pass for "*" and a pattern
+# cannot hide inside an escaped quote. IAM matches action names case-insensitively, and
+# so do these checks.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: service-iam-role
+spec:
+  failurePolicy: Fail
+  paramKind: {apiVersion: v1, kind: ConfigMap}
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["iam.services.k8s.aws"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["roles"]
+  variables:
+    - name: docs
+      expression: "object.spec.?inlinePolicies.orValue({}).map(k, object.spec.inlinePolicies[k])"
+    - name: trust
+      expression: "object.spec.?assumeRolePolicyDocument.orValue('')"
+  validations:
+    - expression: "object.spec.name.startsWith('svc-')"
+      message: "service roles are named svc-<team>-<service>; the controller may create no other (R2)"
+    - expression: "object.spec.?permissionsBoundary.orValue('') == 'arn:aws:iam::' + params.data.awsAccountId + ':policy/service-boundary'"
+      message: "a service role must carry this account's service-boundary permissions boundary (R2)"
+    - expression: "object.spec.?policies.orValue([]).size() == 0 && object.spec.?policyRefs.orValue([]).size() == 0"
+      message: "a service role has only its rendered inline policy; attaching a managed policy is not allowed (R2)"
+    - expression: "!variables.docs.exists(d, d.contains('\\\\')) && !variables.trust.contains('\\\\')"
+      message: "policy documents may not contain a backslash: JSON escapes (\\u002a is *) would hide what the policy grants from every check (R2)"
+    - expression: "!variables.docs.exists(d, d.matches(r'(?i)\"\\s*not(action|resource|principal)\\s*\"'))"
+      message: "NotAction, NotResource and NotPrincipal grant everything they do not name (R2)"
+    - expression: "!variables.docs.exists(d, d.matches(r'\"\\s*[*?]+\\s*\"'))"
+      message: "\"*\" as an action or a resource is never allowed (R2)"
+    - expression: "!variables.docs.exists(d, d.matches(r'(?i)\"\\s*[a-z0-9-]*[*?][a-z0-9-]*:') || d.matches(r'(?i)\"\\s*[a-z0-9-]+:[*?]'))"
+      message: "an action wildcard may only narrow one family of one service, such as s3:Get*; s3:*, *:Get and s3:*Object are not allowed (R2)"
+    - expression: "!variables.docs.exists(d, d.matches(r'(?i)\"\\s*(iam|sts|organizations):'))"
+      message: "IAM, STS and Organizations actions are never grantable to a service (R2)"
+    - expression: >-
+        !variables.docs.exists(d, d.matches(r'(?i)"\s*kms:(create|retire|revoke|put|schedule|cancel|disable|enable|delete|update|import|replicate|tag|untag|rotate)'))
+      message: "KMS key management is never grantable to a service; use kms:Decrypt or kms:GenerateDataKey (R2)"
+    - expression: >-
+        !variables.docs.exists(d,
+          d.matches(r'(?i)"\s*s3:(putbucketpolicy|deletebucketpolicy|putbucketacl|putobjectacl|putobjectversionacl|putbucketpublicaccessblock|putaccountpublicaccessblock|putaccesspointpublicaccessblock|putbucketownershipcontrols|putreplicationconfiguration|deletebucket|putaccesspointpolicy|deleteaccesspointpolicy|putaccesspointpolicyforobjectlambda|deleteaccesspointpolicyforobjectlambda|putmultiregionaccesspointpolicy)\s*"') ||
+          d.matches(r'(?i)"\s*s3:(put|delete)[a-z]*[*?]') ||
+          d.matches(r'(?i)"\s*kafka-cluster:(altercluster|alterclusterdynamicconfiguration|altertopic|altertopicdynamicconfiguration|deletetopic|deletegroup)\s*"') ||
+          d.matches(r'(?i)"\s*kafka-cluster:(alter|delete)[a-z]*[*?]'))
+      message: "actions that change who can reach a resource, or whether it exists, are not grantable to a service, nor are wildcards that could cover them (R2)"
+    - expression: "!variables.docs.exists(d, d.matches(r'\"arn:[^\"/]*[*?]'))"
+      message: "a resource ARN may have a wildcard only in its path, after the first /; arn:aws:s3:::* is every bucket (R2)"
+    - expression: >-
+        variables.trust.contains('"pods.eks.amazonaws.com"') &&
+        !variables.trust.matches(r'"AWS"|"Federated"|"\s*\*\s*"') &&
+        variables.trust.contains('"aws:RequestTag/kubernetes-namespace"') &&
+        variables.trust.contains('"aws:RequestTag/kubernetes-service-account"')
+      message: "a service role is assumable only through EKS Pod Identity, by one namespace and service account (R2)"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: service-iam-role
+spec:
+  policyName: service-iam-role
+  validationActions: [Deny]
+  paramRef: {name: platform-admission, namespace: kube-system, parameterNotFoundAction: Deny}
+  matchResources:
+    resourceRules:
+      - apiGroups: ["iam.services.k8s.aws"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["roles"]
+---
+# A Pod Identity association binds a service account to a role. The role's name says
+# whose it is (svc-<team>-<service>), so the binding must match it: a pod can never be
+# given another team's or another service's role.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: service-pod-identity
+spec:
+  failurePolicy: Fail
+  paramKind: {apiVersion: v1, kind: ConfigMap}
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["eks.services.k8s.aws"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["podidentityassociations"]
+  validations:
+    - expression: "object.spec.namespace in params.data.teams.split(',')"
+      message: "a service role is bound only to a service account in a team namespace (R1, R2)"
+    - expression: "!has(object.spec.targetRoleARN) && !has(object.spec.roleRef)"
+      message: "no role chaining: targetRoleARN would let the pod assume a second role the boundary does not cover (R2)"
+    - expression: "!object.spec.?disableSessionTags.orValue(false)"
+      message: "session tags stay on: the role's trust policy and ABAC conditions depend on them (R2)"
+    - expression: >-
+        object.spec.?roleARN.orValue('') == 'arn:aws:iam::' + params.data.awsAccountId + ':role/svc-' + object.spec.namespace + '-' + object.spec.serviceAccount
+      message: "a service account is bound only to its own role, arn:aws:iam::<account>:role/svc-<namespace>-<service account> (R2)"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: service-pod-identity
+spec:
+  policyName: service-pod-identity
+  validationActions: [Deny]
+  paramRef: {name: platform-admission, namespace: kube-system, parameterNotFoundAction: Deny}
+  matchResources:
+    resourceRules:
+      - apiGroups: ["eks.services.k8s.aws"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["podidentityassociations"]

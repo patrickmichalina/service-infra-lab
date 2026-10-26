@@ -1,0 +1,93 @@
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:38972aa71c195accc5a86faa167f16dc4498542ef764ac68785d3381fdf9aeaf
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: odds-ingest
+    platform.example.org/team: ingestion
+  name: svc-ingestion-odds-ingest
+  namespace: ack-services
+spec:
+  assumeRolePolicyDocument: |-
+    {
+      "Statement": [
+        {
+          "Action": [
+            "sts:AssumeRole",
+            "sts:TagSession"
+          ],
+          "Condition": {
+            "StringEquals": {
+              "aws:RequestTag/eks-cluster-name": "trading-platform-prd",
+              "aws:RequestTag/kubernetes-namespace": "ingestion",
+              "aws:RequestTag/kubernetes-service-account": "odds-ingest",
+              "aws:SourceAccount": "333333333333"
+            }
+          },
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "pods.eks.amazonaws.com"
+          }
+        }
+      ],
+      "Version": "2012-10-17"
+    }
+  description: odds-ingest (ingestion), rendered from its service spec
+  inlinePolicies:
+    service: |-
+      {
+        "Statement": [
+          {
+            "Sid": "Spec0",
+            "Effect": "Allow",
+            "Action": [
+              "s3:PutObject"
+            ],
+            "Resource": [
+              "arn:aws:s3:::trading-platform-prd-odds-snapshots/*"
+            ]
+          },
+          {
+            "Sid": "Spec1",
+            "Effect": "Allow",
+            "Action": [
+              "s3:ListBucket"
+            ],
+            "Resource": [
+              "arn:aws:s3:::trading-platform-prd-odds-snapshots"
+            ]
+          },
+          {
+            "Sid": "Spec2",
+            "Effect": "Allow",
+            "Action": [
+              "kafka-cluster:Connect",
+              "kafka-cluster:WriteDataIdempotently"
+            ],
+            "Resource": [
+              "arn:aws:kafka:us-east-1:333333333333:cluster/trading-platform-prd/9f8e7d6c-2222-4b3a-9c8d-7e6f5a4b3c2d-p1"
+            ]
+          },
+          {
+            "Sid": "Spec3",
+            "Effect": "Allow",
+            "Action": [
+              "kafka-cluster:DescribeTopic",
+              "kafka-cluster:WriteData"
+            ],
+            "Resource": [
+              "arn:aws:kafka:us-east-1:333333333333:topic/trading-platform-prd/9f8e7d6c-2222-4b3a-9c8d-7e6f5a4b3c2d-p1/odds.raw"
+            ]
+          }
+        ],
+        "Version": "2012-10-17"
+      }
+  name: svc-ingestion-odds-ingest
+  permissionsBoundary: arn:aws:iam::333333333333:policy/service-boundary
+  tags:
+    - key: team
+      value: ingestion
+    - key: service
+      value: odds-ingest

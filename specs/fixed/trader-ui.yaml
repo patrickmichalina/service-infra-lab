@@ -1,0 +1,30 @@
+# example-org/trader-ui after reading the verdict: stg stays (scaled down in the chart's stg
+# values), the auth provider is reached as internet egress on 443, the ALB is admitted from
+# its subnets, the key is used with kms:Decrypt, and the call to settlement-writer is declared.
+service: trader-ui
+team: distribution
+environments: [stg, prd]
+
+ingress:
+  - cidr: "{albSubnets}"
+    ports: [3000]
+    reason: internal ALB (connects from its own subnets, not from a pod)
+
+egress:
+  - cidr: 0.0.0.0/0
+    ports: [443]
+    hosts: [login.auth-provider.example, aws:s3]
+    reason: the new auth provider's login endpoint, and S3 through the VPC gateway endpoint
+  - namespace: state
+    ports: [9090]
+    reason: settlement-writer report endpoint
+
+permissions:
+  - actions: [s3:GetObject]
+    resources: ["s3-object:trading-platform-{env}-ui-assets/*"]
+  - actions: [kms:Decrypt]
+    resources: ["kms-key:ui-assets"]
+
+secrets:
+  - key: session-key
+    ssm: /distribution/trader-ui/session-key

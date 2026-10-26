@@ -1,0 +1,119 @@
+// Package svc turns a service spec (untrusted, from a service repository) into
+// the objects the platform applies, enforcing the platform rules on the way.
+//
+//	LoadSpec  -> Spec          (schema only: shape, not policy)
+//	Check     -> []Finding     (one function per rule, in rules.go)
+//	Render    -> []Object      (only what the findings did not refuse)
+//	Evaluate  -> Result        (the three together, with a verdict)
+package svc
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"fmt"
+	"os"
+	"sort"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Spec is what a service team writes, at platform/service.yaml in its repo.
+// Everything environment-specific is either a token ({env}, {vpcCidr}) or a
+// name the platform catalog resolves; nothing in it is trusted.
+type Spec struct {
+	Service      string   `yaml:"service"` // checked against the registry, never trusted
+	Team         string   `yaml:"team"`    // checked against the registry, never trusted
+	Environments []string `yaml:"environments"`
+
+	Ingress             []Peer       `yaml:"ingress"`
+	Egress              []Peer       `yaml:"egress"`
+	Permissions         []Permission `yaml:"permissions"`
+	Secrets             []Secret     `yaml:"secrets"`
+	AcknowledgeRemovals []Removal    `yaml:"acknowledgeRemovals"`
+
+	Unknown map[string]yaml.Node `yaml:",inline"`
+
+	// Repo is the repository the spec was read from. It comes from the CI
+	// job that reads the file (its own project path), never from the file.
+	Repo string `yaml:"-"`
+
+	// Path is the file the spec was read from; Raw is its parsed tree, used to
+	// scan every value for R5 regardless of which field it sits in.
+	Path   string    `yaml:"-"`
+	Raw    yaml.Node `yaml:"-"`
+	Digest string    `yaml:"-"` // sha256 of the file, stamped on what it renders
+}
+
+// Peer is one side of a network rule: a namespace, a CIDR token, or a
+// counterparty (a broker or venue the platform catalog knows). Hosts
+// names the endpoints an internet rule is for; a NetworkPolicy cannot match
+// them, but they make the rule's purpose checkable and are what an FQDN-aware
+// network layer enforces.
+type Peer struct {
+	Namespace    string               `yaml:"namespace"`
+	CIDR         string               `yaml:"cidr"`
+	Counterparty string               `yaml:"counterparty"` // a broker or venue in the platform catalog (egress only)
+	Ports        []int                `yaml:"ports"`
+	Hosts        []string             `yaml:"hosts"`
+	Reason       string               `yaml:"reason"`
+	Unknown      map[string]yaml.Node `yaml:",inline"`
+}
+
+// Permission is one IAM statement, with resources written as platform
+// references (s3-object:bucket/key, msk-topic:cluster/topic, ...), never ARNs.
+type Permission struct {
+	Actions   []string             `yaml:"actions"`
+	Resources []string             `yaml:"resources"`
+	Unknown   map[string]yaml.Node `yaml:",inline"`
+}
+
+// Secret maps one SSM parameter, named without its env prefix, to a key in the
+// service's Kubernetes Secret.
+type Secret struct {
+	Key     string               `yaml:"key"`
+	SSM     string               `yaml:"ssm"`
+	Unknown map[string]yaml.Node `yaml:",inline"`
+}
+
+// Removal is the engineer confirming that a permission the running pod uses
+// may go away (R8).
+type Removal struct {
+	Action   string               `yaml:"action"`
+	Resource string               `yaml:"resource"`
+	Reason   string               `yaml:"reason"`
+	Unknown  map[string]yaml.Node `yaml:",inline"`
+}
+
+// LoadSpec parses the spec file of repo. It fails only when the file is not
+// YAML; everything else is a Finding, so the engineer gets every problem at once.
+func LoadSpec(path, repo string) (*Spec, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSpec(path, repo, b)
+}
+
+// ParseSpec parses spec content read from repo; path is used in messages only.
+func ParseSpec(path, repo string, b []byte) (*Spec, error) {
+	var s Spec
+	if err := yaml.Unmarshal(b, &s.Raw); err != nil {
+		return nil, fmt.Errorf("%s: not valid YAML: %w", path, err)
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(b))
+	if err := dec.Decode(&s); err != nil {
+		return nil, fmt.Errorf("%s: does not match the spec schema: %w", path, err)
+	}
+	s.Path, s.Repo = path, repo
+	s.Digest = fmt.Sprintf("sha256:%x", sha256.Sum256(b))
+	return &s, nil
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}

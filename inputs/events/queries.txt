@@ -1,0 +1,12 @@
+# now                   service            revision
+2026-10-08T12:00:00Z    odds-ingest        r14
+2026-10-08T12:00:00Z    odds-ingest        r13
+2026-10-08T13:00:00Z    odds-ingest        r14
+2026-10-08T13:00:00Z    odds-ingest        r15
+2026-10-08T10:40:00Z    settlement-writer  r7
+2026-10-08T12:00:00Z    settlement-writer  r7
+2026-10-08T12:00:00Z    rfq-router         r3
+2026-10-08T12:00:00Z    rfq-router         r4
+2026-10-08T12:00:00Z    trader-ui          r22
+2026-10-08T12:00:00Z    book-builder       r9
+2026-10-08T12:00:00Z    book-builder       r10

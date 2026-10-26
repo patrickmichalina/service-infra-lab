@@ -1,0 +1,119 @@
+# Platform-owned Argo CD projects (one set per cluster). The chart a team ships is
+# untrusted too: its project deploys only into the team's namespace, no cluster-scoped
+# kinds at all (a ClusterRole is refused here, which is what rfq-router hit), and only
+# the namespaced kinds listed. A list of what is allowed, not of what is refused: a CRD
+# installed later (a CiliumNetworkPolicy, say) is refused until someone decides it is
+# safe. ServiceAccount, NetworkPolicy, ExternalSecret and the ACK kinds are absent on
+# purpose: the platform renders those under services-infra.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: ingestion, namespace: argocd}
+spec:
+  description: Charts of team ingestion, into namespace ingestion only
+  sourceRepos: ["111111111111.dkr.ecr.us-east-1.amazonaws.com/charts"]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: ingestion}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: apps, kind: Deployment}
+    - {group: apps, kind: StatefulSet}
+    - {group: "", kind: Service}
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Secret}
+    - {group: batch, kind: Job}
+    - {group: batch, kind: CronJob}
+    - {group: autoscaling, kind: HorizontalPodAutoscaler}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: networking.k8s.io, kind: Ingress}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: state, namespace: argocd}
+spec:
+  description: Charts of team state, into namespace state only
+  sourceRepos: ["111111111111.dkr.ecr.us-east-1.amazonaws.com/charts"]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: state}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: apps, kind: Deployment}
+    - {group: apps, kind: StatefulSet}
+    - {group: "", kind: Service}
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Secret}
+    - {group: batch, kind: Job}
+    - {group: batch, kind: CronJob}
+    - {group: autoscaling, kind: HorizontalPodAutoscaler}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: networking.k8s.io, kind: Ingress}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: normalization, namespace: argocd}
+spec:
+  description: Charts of team normalization, into namespace normalization only
+  sourceRepos: ["111111111111.dkr.ecr.us-east-1.amazonaws.com/charts"]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: normalization}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: apps, kind: Deployment}
+    - {group: apps, kind: StatefulSet}
+    - {group: "", kind: Service}
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Secret}
+    - {group: batch, kind: Job}
+    - {group: batch, kind: CronJob}
+    - {group: autoscaling, kind: HorizontalPodAutoscaler}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: networking.k8s.io, kind: Ingress}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: distribution, namespace: argocd}
+spec:
+  description: Charts of team distribution, into namespace distribution only
+  sourceRepos: ["111111111111.dkr.ecr.us-east-1.amazonaws.com/charts"]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: distribution}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: apps, kind: Deployment}
+    - {group: apps, kind: StatefulSet}
+    - {group: "", kind: Service}
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Secret}
+    - {group: batch, kind: Job}
+    - {group: batch, kind: CronJob}
+    - {group: autoscaling, kind: HorizontalPodAutoscaler}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: networking.k8s.io, kind: Ingress}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: {name: services-infra, namespace: argocd}
+spec:
+  description: Objects svcrender rendered from service specs, applied from platform-gitops only
+  sourceRepos: ["https://git.example.org/platform-gitops.git"]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: ingestion}
+    - {server: https://kubernetes.default.svc, namespace: state}
+    - {server: https://kubernetes.default.svc, namespace: normalization}
+    - {server: https://kubernetes.default.svc, namespace: distribution}
+    - {server: https://kubernetes.default.svc, namespace: ack-services}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: "", kind: ServiceAccount}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: external-secrets.io, kind: ExternalSecret}
+    - {group: iam.services.k8s.aws, kind: Role}
+    - {group: eks.services.k8s.aws, kind: PodIdentityAssociation}

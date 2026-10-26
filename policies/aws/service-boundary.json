@@ -1,0 +1,72 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowWhatTheRolePolicyGrants",
+      "Effect": "Allow",
+      "Action": "*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "NeverIdentityOrKeyManagement",
+      "Effect": "Deny",
+      "Action": [
+        "iam:*",
+        "sts:*",
+        "organizations:*",
+        "kms:CreateKey",
+        "kms:CreateGrant",
+        "kms:RetireGrant",
+        "kms:RevokeGrant",
+        "kms:PutKeyPolicy",
+        "kms:ScheduleKeyDeletion",
+        "kms:CancelKeyDeletion",
+        "kms:DisableKey",
+        "kms:EnableKey",
+        "kms:CreateAlias",
+        "kms:DeleteAlias",
+        "kms:UpdateAlias",
+        "kms:UpdateKeyDescription",
+        "kms:EnableKeyRotation",
+        "kms:DisableKeyRotation",
+        "kms:RotateKeyOnDemand",
+        "kms:ImportKeyMaterial",
+        "kms:DeleteImportedKeyMaterial",
+        "kms:TagResource",
+        "kms:UntagResource",
+        "kms:ReplicateKey",
+        "kms:UpdatePrimaryRegion"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NeverControlWhoReachesAResource",
+      "Effect": "Deny",
+      "Action": [
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy",
+        "s3:PutBucketAcl",
+        "s3:PutObjectAcl",
+        "s3:PutObjectVersionAcl",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutAccountPublicAccessBlock",
+        "s3:PutAccessPointPublicAccessBlock",
+        "s3:PutBucketOwnershipControls",
+        "s3:PutReplicationConfiguration",
+        "s3:DeleteBucket",
+        "s3:PutAccessPointPolicy",
+        "s3:DeleteAccessPointPolicy",
+        "s3:PutAccessPointPolicyForObjectLambda",
+        "s3:DeleteAccessPointPolicyForObjectLambda",
+        "s3:PutMultiRegionAccessPointPolicy",
+        "kafka-cluster:AlterCluster",
+        "kafka-cluster:AlterClusterDynamicConfiguration",
+        "kafka-cluster:AlterTopic",
+        "kafka-cluster:AlterTopicDynamicConfiguration",
+        "kafka-cluster:DeleteTopic",
+        "kafka-cluster:DeleteGroup"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

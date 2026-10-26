@@ -1,0 +1,22 @@
+# Platform-owned named resources. Specs refer to these by name (msk-cluster:main);
+# only this file knows ids. Values are illustrative: the scenario gives none.
+region: us-east-1
+endpoints:
+  s3: gateway        # S3 through a VPC gateway endpoint (assumed; the scenario does not say)
+albSubnets:          # subnets the internal ALBs connect from, with IP targets (invented)
+  - 10.20.240.0/24
+  - 10.20.241.0/24
+msk:
+  main: {name: trading-platform-stg, uuid: 0a1b2c3d-1111-4a5b-8c9d-0e1f2a3b4c5d-s1}
+rds:
+  settlements: {resourceId: db-STGSETTLEMENTS7Q2W3E4R5T6Y}
+kms:
+  ui-assets: {keyId: 2f6c1d0e-aaaa-4b1c-9d2e-3f4a5b6c7d8e}
+# Brokers and venues with a connection agreement: fixed endpoints both sides allow-list
+# (a cross-connect or VPN in practice). Specs name them; only this file holds the
+# addresses. Invented, from documentation ranges (RFC 5737).
+counterparties:
+  venue-a-fix:       # venue A's FIX order-entry gateway, its UAT endpoints
+    cidrs: [198.51.100.16/28]
+    ports: [9880]
+    teams: [normalization]

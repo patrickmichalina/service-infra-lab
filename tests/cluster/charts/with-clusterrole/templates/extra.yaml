@@ -1,0 +1,5 @@
+# What rfq-router's chart contained: a cluster-scoped kind.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: chart-clusterrole}
+rules: [{apiGroups: [""], resources: [secrets], verbs: [get, list]}]

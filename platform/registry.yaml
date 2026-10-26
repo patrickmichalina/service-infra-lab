@@ -1,0 +1,31 @@
+# Platform-owned: which repository owns which service, for which team, and which chart and
+# image it ships. In platform-gitops this is sharded per team (teams/<team>/services.yaml)
+# with that team's leads as CODEOWNERS, so a team registers a new service without the
+# platform team.
+#
+# The renderer looks a spec up by the repository it came from (the CI job's own project
+# path), never by anything the spec says: the spec's service and team are only checked
+# against this entry. Chart and image live only here, because they decide what runs with
+# the service's role; a spec cannot point its role at someone else's image.
+services:
+  odds-ingest:       {repo: example-org/odds-ingest,       team: ingestion,     chart: odds-ingest,       image: trading/odds-ingest}
+  settlement-writer: {repo: example-org/settlement-writer, team: state,         chart: settlement-writer, image: trading/settlement-writer}
+  rfq-router:        {repo: example-org/rfq-router,        team: normalization, chart: rfq-router,        image: trading/rfq-router}
+  trader-ui:         {repo: example-org/trader-ui,         team: distribution,  chart: trader-ui,         image: trading/trader-ui}
+
+# Who owns each resource a spec may reference, and whom the owner shares it with. In
+# platform-gitops this is teams/<owner>/resources.yaml with that team's leads as
+# CODEOWNERS: sharing is the owner's decision, not the consumer's and not the platform
+# team's. A wildcard in a spec must stay inside one prefix entry. Consumer groups and
+# database users need no entry: a service may use only its own (named after it).
+# The owners are invented: the scenario says who uses each resource, not who owns it.
+resources:
+  - {ref: "s3-bucket:trading-platform-{env}-odds-snapshots", owner: ingestion}
+  - {ref: "s3-bucket:trading-platform-{env}-settlement-reports", owner: state}
+  - {ref: "s3-bucket:trading-platform-{env}-rfq-audit", owner: normalization}
+  - {ref: "s3-bucket:trading-platform-{env}-ui-assets", owner: distribution}
+  - {ref: "msk-topic:main/odds.", prefix: true, owner: ingestion}
+  - {ref: "msk-topic:main/rfq.", prefix: true, owner: normalization}
+  - {ref: "msk-topic:main/settlement-instructions", owner: state}
+  - {ref: "msk-topic:main/pp-settlement-events", owner: state}
+  - {ref: "kms-key:ui-assets", owner: distribution}

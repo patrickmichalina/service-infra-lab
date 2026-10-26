@@ -1,0 +1,58 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:d4ab774077d4756ad5cdcbdaca0c7a1cee9e74b8184c82179e67895b8ad40814
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: settlement-writer
+    platform.example.org/team: state
+  name: settlement-writer
+  namespace: state
+spec:
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+      to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+    - ports:
+        - port: 5432
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 10.30.0.0/16
+    - ports:
+        - port: 9098
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 10.30.0.0/16
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: distribution
+      ports:
+        - port: 9090
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: settlement-writer
+  policyTypes:
+    - Ingress
+    - Egress

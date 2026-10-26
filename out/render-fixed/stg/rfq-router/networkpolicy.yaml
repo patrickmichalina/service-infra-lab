@@ -1,0 +1,73 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    platform.example.org/egress-hosts: '*.s3.us-east-1.amazonaws.com,s3.us-east-1.amazonaws.com'
+    platform.example.org/spec-digest: sha256:e0bf3756405422a0f4eef80e13ad9d0becc4a30ae293f7dfdcf9100d75f4f3b4
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: rfq-router
+    platform.example.org/team: normalization
+  name: rfq-router
+  namespace: normalization
+spec:
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+      to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+    - ports:
+        - port: 80
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 169.254.170.23/32
+    - ports:
+        - port: 9098
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 10.20.0.0/16
+    - ports:
+        - port: 443
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.20.0.0/16
+    - ports:
+        - port: 9880
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 198.51.100.16/28
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: normalization
+      ports:
+        - port: 8080
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rfq-router
+  policyTypes:
+    - Ingress
+    - Egress

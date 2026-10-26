@@ -1,0 +1,38 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version-file: go.mod}
+      - run: test -z "$(gofmt -l $(git ls-files '*.go' | grep -v '^vendor/'))"
+      - run: go vet ./...
+      - run: go test ./...
+      - name: committed outputs are what the code produces
+        run: |
+          go run ./cmd/svcrender all -specs specs -out out/render
+          go run ./cmd/svcrender all -specs specs/fixed -out out/render-fixed
+          go run ./cmd/soakgate > out/promotion/verdicts.txt
+          git diff --exit-code out/
+  admission:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: kyverno CLI
+        run: |
+          mkdir -p "$HOME/bin" && echo "$HOME/bin" >> "$GITHUB_PATH"
+          curl -fsSL https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz | tar -xz -C "$HOME/bin" kyverno
+      - run: policies/admission/test.sh
+  cluster:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: kind
+        run: |
+          mkdir -p "$HOME/bin" && echo "$HOME/bin" >> "$GITHUB_PATH"
+          curl -fsSL https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64 -o "$HOME/bin/kind"
+          chmod +x "$HOME/bin/kind"
+      - run: tests/cluster/run.sh

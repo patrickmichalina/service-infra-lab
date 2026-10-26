@@ -1,0 +1,47 @@
+# example-org/settlement-writer after reading the verdict: the write to pp-settlement-events
+# the shared role used to cover is now declared, and S3 is reachable through its endpoint.
+service: settlement-writer
+team: state
+environments: [stg, prd]
+
+ingress:
+  - namespace: monitoring
+    ports: [8080]
+    reason: Prometheus scrape
+  - namespace: distribution
+    ports: [9090]
+    reason: trader-ui calls the report endpoint
+
+egress:
+  - cidr: "{vpcCidr}"
+    ports: [5432]
+    reason: settlements RDS instance
+  - cidr: "{vpcCidr}"
+    ports: [9098]
+    reason: MSK brokers, IAM auth
+  - cidr: 0.0.0.0/0
+    ports: [443]
+    hosts: [aws:s3]
+    reason: S3 through the VPC gateway endpoint
+
+permissions:
+  - actions: [rds-db:connect]
+    resources: ["rds-dbuser:settlements/settlement_writer"]
+  - actions: [s3:GetObject, s3:PutObject]
+    resources: ["s3-object:trading-platform-{env}-settlement-reports/*"]
+  - actions: [s3:ListBucket]
+    resources: ["s3-bucket:trading-platform-{env}-settlement-reports"]
+  - actions: [kafka-cluster:Connect]
+    resources: ["msk-cluster:main"]
+  - actions: [kafka-cluster:DescribeTopic, kafka-cluster:ReadData]
+    resources: ["msk-topic:main/settlement-instructions"]
+  - actions: [kafka-cluster:DescribeGroup, kafka-cluster:AlterGroup]
+    resources: ["msk-group:main/settlement-writer"]
+  - actions: [kafka-cluster:DescribeTopic, kafka-cluster:WriteData]
+    resources: ["msk-topic:main/pp-settlement-events"]
+
+secrets:
+  - key: db-password
+    ssm: /state/settlement-writer/db-password
+  - key: report-signing-key
+    ssm: /state/settlement-writer/report-signing-key

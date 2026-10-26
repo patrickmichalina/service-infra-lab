@@ -1,0 +1,45 @@
+# Platform baseline for every team namespace: deny all ingress and egress to any pod no
+# service policy selects. Without it, a pod a chart adds (a job, a sidecar deployment)
+# accepts traffic from anywhere, and on the VPC CNI an egress rule to {vpcCidr} could
+# reach it. Each service's rendered policy then opens exactly what its spec declares.
+# An empty podSelector is allowed by admission only in this shape: no rules at all.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: ingestion
+  labels: {app.kubernetes.io/managed-by: platform}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: state
+  labels: {app.kubernetes.io/managed-by: platform}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: normalization
+  labels: {app.kubernetes.io/managed-by: platform}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: distribution
+  labels: {app.kubernetes.io/managed-by: platform}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]

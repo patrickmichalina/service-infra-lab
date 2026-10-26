@@ -1,0 +1,24 @@
+env: prd
+awsAccountId: "333333333333"
+clusterName: trading-platform-prd
+vpcCidr: 10.30.0.0/16
+ssmPrefix: /prd
+imageRegistry: 333333333333.dkr.ecr.us-east-1.amazonaws.com
+chartRegistry: oci://111111111111.dkr.ecr.us-east-1.amazonaws.com/charts
+permissionsBoundaryArn: arn:aws:iam::333333333333:policy/service-boundary
+argocd:
+  autoSync: false
+  allowedProjects:
+    - ingestion
+    - state
+    - normalization
+    - distribution
+teams:
+  ingestion: {namespace: ingestion, project: ingestion}
+  state: {namespace: state, project: state}
+  normalization: {namespace: normalization, project: normalization}
+  distribution: {namespace: distribution, project: distribution}
+promotion:
+  # a revision is promotable to prd once it has been the live, healthy stg revision this long
+  from: stg
+  soakMinutes: 120

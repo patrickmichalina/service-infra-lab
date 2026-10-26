@@ -1,0 +1,32 @@
+# example-org/odds-ingest: platform/service.yaml, as written from request 01.
+service: odds-ingest
+team: ingestion
+environments: [stg, prd]
+
+ingress:
+  - namespace: monitoring
+    ports: [8080]
+    reason: Prometheus scrape
+
+egress:
+  - cidr: 0.0.0.0/0
+    ports: [443]
+    hosts: [feed.vendor-example.com]
+    reason: vendor odds feed
+  - cidr: "{vpcCidr}"
+    ports: [9098]
+    reason: MSK brokers, IAM auth
+
+permissions:
+  - actions: [s3:PutObject]
+    resources: ["s3-object:trading-platform-{env}-odds-snapshots/*"]
+  - actions: [s3:ListBucket]
+    resources: ["s3-bucket:trading-platform-{env}-odds-snapshots"]
+  - actions: [kafka-cluster:Connect, kafka-cluster:WriteDataIdempotently]
+    resources: ["msk-cluster:main"]
+  - actions: [kafka-cluster:DescribeTopic, kafka-cluster:WriteData]
+    resources: ["msk-topic:main/odds.raw"]
+
+secrets:
+  - key: vendor-api-key
+    ssm: /ingestion/odds-ingest/vendor-api-key

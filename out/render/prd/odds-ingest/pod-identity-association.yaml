@@ -1,0 +1,16 @@
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:38972aa71c195accc5a86faa167f16dc4498542ef764ac68785d3381fdf9aeaf
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: odds-ingest
+    platform.example.org/team: ingestion
+  name: odds-ingest
+  namespace: ack-services
+spec:
+  clusterName: trading-platform-prd
+  namespace: ingestion
+  roleARN: arn:aws:iam::333333333333:role/svc-ingestion-odds-ingest
+  serviceAccount: odds-ingest

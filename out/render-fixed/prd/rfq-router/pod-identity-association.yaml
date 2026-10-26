@@ -1,0 +1,16 @@
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:e0bf3756405422a0f4eef80e13ad9d0becc4a30ae293f7dfdcf9100d75f4f3b4
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: rfq-router
+    platform.example.org/team: normalization
+  name: rfq-router
+  namespace: ack-services
+spec:
+  clusterName: trading-platform-prd
+  namespace: normalization
+  roleARN: arn:aws:iam::333333333333:role/svc-normalization-rfq-router
+  serviceAccount: rfq-router

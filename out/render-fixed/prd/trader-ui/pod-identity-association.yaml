@@ -1,0 +1,16 @@
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  annotations:
+    platform.example.org/spec-digest: sha256:2456c6d5883d7ccdae0b712ae9709f04d016fabe8fb5b9df415a3b7f489ac0fd
+  labels:
+    app.kubernetes.io/managed-by: svcrender
+    app.kubernetes.io/name: trader-ui
+    platform.example.org/team: distribution
+  name: trader-ui
+  namespace: ack-services
+spec:
+  clusterName: trading-platform-prd
+  namespace: distribution
+  roleARN: arn:aws:iam::333333333333:role/svc-distribution-trader-ui
+  serviceAccount: trader-ui
