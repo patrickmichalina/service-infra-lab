@@ -1,0 +1,149 @@
+Creating cluster "platform-kargo-17445" ...
+ • Ensuring node image (kindest/node:v1.34.0) 🖼️  ...
+ ✓ Ensuring node image (kindest/node:v1.34.0) 🖼️
+ • Preparing nodes 📦   ...
+ ✓ Preparing nodes 📦 
+ • Writing configuration 📜  ...
+ ✓ Writing configuration 📜
+ • Starting control-plane 🕹️  ...
+ ✓ Starting control-plane 🕹️
+ • Installing CNI 🔌  ...
+ ✓ Installing CNI 🔌
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+ • Waiting ≤ 1m30s for control-plane = Ready ⏳  ...
+ ✓ Waiting ≤ 1m30s for control-plane = Ready ⏳
+ • Ready after 18s 💚
+Set kubectl context to "kind-platform-kargo-17445"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-platform-kargo-17445 --kubeconfig /var/folders/9z/w0sl4vp155qbbn_tr27553gr0000gn/T/tmp.mmIXK394ix/kubeconfig
+
+Have a nice day! 👋
+namespace/cert-manager created
+customresourcedefinition.apiextensions.k8s.io/certificaterequests.cert-manager.io created
+Warning: unrecognized format "int32"
+Warning: unrecognized format "int64"
+customresourcedefinition.apiextensions.k8s.io/certificates.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/challenges.acme.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/clusterissuers.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/issuers.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/orders.acme.cert-manager.io created
+serviceaccount/cert-manager-cainjector created
+serviceaccount/cert-manager created
+serviceaccount/cert-manager-webhook created
+clusterrole.rbac.authorization.k8s.io/cert-manager-cainjector created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-issuers created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-clusterissuers created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-certificates created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-orders created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-challenges created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-ingress-shim created
+clusterrole.rbac.authorization.k8s.io/cert-manager-cluster-view created
+clusterrole.rbac.authorization.k8s.io/cert-manager-view created
+clusterrole.rbac.authorization.k8s.io/cert-manager-edit created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-approve:cert-manager-io created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-certificatesigningrequests created
+clusterrole.rbac.authorization.k8s.io/cert-manager-webhook:subjectaccessreviews created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-cainjector created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-issuers created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-clusterissuers created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-certificates created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-orders created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-challenges created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-ingress-shim created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-approve:cert-manager-io created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-certificatesigningrequests created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-webhook:subjectaccessreviews created
+role.rbac.authorization.k8s.io/cert-manager-cainjector:leaderelection created
+role.rbac.authorization.k8s.io/cert-manager:leaderelection created
+role.rbac.authorization.k8s.io/cert-manager-tokenrequest created
+role.rbac.authorization.k8s.io/cert-manager-webhook:dynamic-serving created
+rolebinding.rbac.authorization.k8s.io/cert-manager-cainjector:leaderelection created
+rolebinding.rbac.authorization.k8s.io/cert-manager:leaderelection created
+rolebinding.rbac.authorization.k8s.io/cert-manager-cert-manager-tokenrequest created
+rolebinding.rbac.authorization.k8s.io/cert-manager-webhook:dynamic-serving created
+service/cert-manager-cainjector created
+service/cert-manager created
+service/cert-manager-webhook created
+deployment.apps/cert-manager-cainjector created
+deployment.apps/cert-manager created
+deployment.apps/cert-manager-webhook created
+mutatingwebhookconfiguration.admissionregistration.k8s.io/cert-manager-webhook created
+validatingwebhookconfiguration.admissionregistration.k8s.io/cert-manager-webhook created
+namespace/argo-rollouts created
+Warning: unrecognized format "int32"
+Warning: unrecognized format "int64"
+customresourcedefinition.apiextensions.k8s.io/analysisruns.argoproj.io created
+customresourcedefinition.apiextensions.k8s.io/analysistemplates.argoproj.io created
+customresourcedefinition.apiextensions.k8s.io/clusteranalysistemplates.argoproj.io created
+customresourcedefinition.apiextensions.k8s.io/experiments.argoproj.io created
+customresourcedefinition.apiextensions.k8s.io/rollouts.argoproj.io created
+serviceaccount/argo-rollouts created
+clusterrole.rbac.authorization.k8s.io/argo-rollouts created
+clusterrole.rbac.authorization.k8s.io/argo-rollouts-aggregate-to-admin created
+clusterrole.rbac.authorization.k8s.io/argo-rollouts-aggregate-to-edit created
+clusterrole.rbac.authorization.k8s.io/argo-rollouts-aggregate-to-view created
+clusterrolebinding.rbac.authorization.k8s.io/argo-rollouts created
+configmap/argo-rollouts-config created
+secret/argo-rollouts-notification-secret created
+service/argo-rollouts-metrics created
+deployment.apps/argo-rollouts created
+Waiting for deployment "cert-manager-webhook" rollout to finish: 0 of 1 updated replicas are available...
+deployment "cert-manager-webhook" successfully rolled out
+Waiting for deployment "argo-rollouts" rollout to finish: 0 of 1 updated replicas are available...
+deployment "argo-rollouts" successfully rolled out
+Pulled: ghcr.io/akuity/kargo-charts/kargo:1.8.3
+Digest: sha256:2c14272d1e2341fe813ebbc83da89860f00ff03177f147aace0a00a27109bde5
+I1028 13:45:58.996778   53301 warnings.go:107] "Warning: unrecognized format \"int64\""
+I1028 13:45:59.001219   53301 warnings.go:107] "Warning: unrecognized format \"int64\""
+I1028 13:45:59.003053   53301 warnings.go:107] "Warning: unrecognized format \"int32\""
+I1028 13:45:59.007836   53301 warnings.go:107] "Warning: unrecognized format \"int32\""
+I1028 13:45:59.007863   53301 warnings.go:107] "Warning: unrecognized format \"int64\""
+I1028 13:45:59.007861   53301 warnings.go:107] "Warning: unrecognized format \"int64\""
+I1028 13:45:59.007991   53301 warnings.go:107] "Warning: unrecognized format \"int32\""
+I1028 13:45:59.008240   53301 warnings.go:107] "Warning: unrecognized format \"int32\""
+I1028 13:45:59.008252   53301 warnings.go:107] "Warning: unrecognized format \"int64\""
+I1028 13:45:59.010639   53301 warnings.go:107] "Warning: unrecognized format \"int32\""
+I1028 13:45:59.010664   53301 warnings.go:107] "Warning: unrecognized format \"int64\""
+NAME: kargo
+LAST DEPLOYED: Wed Oct 28 13:45:58 2026
+NAMESPACE: kargo
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+.----------------------------------------------------------------------------------.
+|     _                            _                    _          _ _             |
+|    | | ____ _ _ __ __ _  ___    | |__  _   _     __ _| | ___   _(_) |_ _   _     |
+|    | |/ / _` | '__/ _` |/ _ \   | '_ \| | | |   / _` | |/ / | | | | __| | | |    |
+|    |   < (_| | | | (_| | (_) |  | |_) | |_| |  | (_| |   <| |_| | | |_| |_| |    |
+|    |_|\_\__,_|_|  \__, |\___/   |_.__/ \__, |   \__,_|_|\_\\__,_|_|\__|\__, |    |
+|                   |___/                |___/                           |___/     |
+'----------------------------------------------------------------------------------'
+
+📚  Kargo documentation can be found at:
+
+      https://docs.kargo.io
+
+🙂  Happy promoting!
+PASS project namespace
+PASS all four pipelines validated by Kargo admission
+The Promotion "odds-ingest-prd.1793213183529524000" is invalid: spec.freight: Invalid value: "2f4261c3370d68283bbe3e1a9fe38fc2e810d3d6": Freight is not available to this Stage
+
+PASS before-staging rejected by admission
+PASS successful AnalysisRun verifies Freight
+The Promotion "odds-ingest-prd.1793213189886441000" is invalid: spec.freight: Invalid value: "2f4261c3370d68283bbe3e1a9fe38fc2e810d3d6": Freight is not available to this Stage
+
+PASS before-soak rejected by admission
+PASS native soak elapsed
+PASS promotion after native soak
+PASS failed AnalysisRun
+The Promotion "odds-ingest-prd.1793213254680447000" is invalid: spec.freight: Invalid value: "35453e91b162b80ce17eebbac4668bc253d5557b": Freight is not available to this Stage
+
+PASS failed-verification rejected by admission
+PASS failed Freight remains unverified
+PASS older verified Freight remains promotable
+Deleting cluster "platform-kargo-17445" ...
+Deleted nodes: ["platform-kargo-17445-control-plane"]

@@ -1,3 +1,5 @@
+> This document describes the original assignment solution. On `feat/kargo-native-promotion`, the promotion implementation is replaced by the [native Kargo pipeline](../kargo/README.md), with explicitly different release-qualification semantics. The infrastructure rules and renderer still apply.
+
 # Self-service service infrastructure
 
 **Problem.** Every routine change waits about four days on a two-person platform team, which hand-writes five files and

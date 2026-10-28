@@ -1,0 +1,94 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Project
+metadata:
+  name: {{ .Values.project }}
+---
+{{ range $service := .Values.services }}
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: {{ $service }}
+  namespace: {{ $.Values.project }}
+spec:
+  subscriptions:
+  - git:
+      repoURL: {{ $.Values.bundleRepo }}
+      branch: main
+      includePaths: [bundles/stg/{{ $service }}, bundles/prd/{{ $service }}]
+---
+{{ range $env := list "stg" "prd" }}
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: {{ $service }}-{{ $env }}
+  namespace: {{ $.Values.project }}
+spec:
+  requestedFreight:
+  - origin: {kind: Warehouse, name: {{ $service }}}
+    sources:
+{{ if eq $env "stg" }}
+      direct: true
+{{ else }}
+      stages: [{{ $service }}-stg]
+      requiredSoakTime: {{ $.Values.soakTime }}
+{{ end }}
+  promotionTemplate:
+    spec:
+      steps:
+      - uses: git-clone
+        config:
+          repoURL: {{ $.Values.bundleRepo }}
+          checkout:
+          - commit: {{ printf "${{ commitFrom(%q).ID }}" $.Values.bundleRepo | quote }}
+            path: ./src
+          - branch: {{ $service }}-{{ $env }}
+            create: true
+            path: ./out
+      - uses: git-clear
+        config: {path: ./out}
+      - uses: copy
+        config:
+          inPath: ./src/bundles/{{ $env }}/{{ $service }}
+          outPath: ./out
+      - uses: git-commit
+        as: commit
+        config: {path: ./out, message: "Promote verified bundle"}
+      - uses: git-push
+        config: {path: ./out}
+{{ if eq $env "stg" }}
+      - uses: argocd-update
+        config:
+          apps:
+          - name: {{ $service }}-stg-bundle
+            sources:
+            - repoURL: {{ $.Values.bundleRepo }}
+              desiredRevision: {{ printf "${{ outputs['commit'].commit }}" | quote }}
+              updateTargetRevision: false
+  verification:
+    analysisTemplates: [{name: healthy-window}]
+    args:
+    - name: service
+      value: {{ $service }}
+{{ end }}
+---
+{{ end }}
+{{ end }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: healthy-window
+  namespace: {{ .Values.project }}
+spec:
+  args:
+  - name: service
+  metrics:
+  - name: healthy
+    interval: {{ .Values.analysisInterval }}
+    count: {{ .Values.analysisCount }}
+    failureLimit: 0
+    consecutiveErrorLimit: 0
+    successCondition: len(result) == 1 && result[0] == 1
+    provider:
+      prometheus:
+        address: {{ .Values.prometheus }}
+        query: {{ `min(argocd_app_info{name="{{args.service}}-stg-bundle",health_status="Healthy",sync_status="Synced"}) or vector(0)` | quote }}

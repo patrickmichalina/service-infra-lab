@@ -1,0 +1,8 @@
+project: platform-promotion
+# Repository containing validated, rendered bundles/<env>/<service> at immutable commits.
+bundleRepo: https://github.com/example-org/platform-bundles.git
+prometheus: http://prometheus.monitoring.svc:9090
+soakTime: 120m
+analysisInterval: 1m
+analysisCount: 120
+services: [odds-ingest, settlement-writer, rfq-router, trader-ui]

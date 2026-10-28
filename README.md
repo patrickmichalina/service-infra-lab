@@ -1,3 +1,5 @@
+> **Kargo branch:** Native promotion now lives in [`kargo/`](kargo/README.md). Run `tests/kargo/run.sh` to exercise actual Kargo and AnalysisRun controllers. The original assignment implementation below is retained for reference; its soakgate is not used by the Kargo pipeline. See the Kargo README for changed qualification semantics and deployment prerequisites.
+
 # Platform take-home: self-service service infrastructure
 
 | Deliverable | Where |
